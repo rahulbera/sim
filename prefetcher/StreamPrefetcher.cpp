@@ -1,56 +1,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <map>
-#include "prefetcher.h"
+#include <string.h>
+#include "StreamPrefetcher.h"
 
-/* Line size: 64B, Page: 4KB */
-#define LINE_SIZE_LOG 6 
-#define PAGE_SIZE_LOG 12
-#define SIZE 64
-
-bool debug;
-
-typedef struct entry
+void StreamPrefetcher::prefetcher_init(char *s, bool debug_mode, int n)
 {
-	unsigned int page;
-	unsigned int last_line;
-	int stride;
-	int age;
-	bool valid;
-}tracker_t;
-
-typedef struct info
-{
-	unsigned int last_line;
-	unsigned int prefetch_line;
-}info_t;
-
-tracker_t trackers[SIZE];
-unsigned int last_accessed_line;
-unsigned int last_prefetched_line;
-std::map<unsigned int, info_t*> prefetch_map;
-std::map<unsigned int, info_t*>::iterator it;
-
-/* Stats variables */
-unsigned int stat_total_mem_access = 0;
-unsigned int stat_total_prefetch = 0;
-unsigned int stat_total_prefetch_hit = 0;
-unsigned int stat_total_prefetch_hit2 = 0;
-unsigned int stat_heart_beat_prefetch = 0;
-unsigned int stat_heart_beat_prefetch_hit = 0;
-unsigned int stat_heart_beat_prefetch_hit2 = 0;
-
-void prefetcher_init(bool debug_mode)
-{
-	if(debug)fprintf(stderr, "Multi-stream prefetcher, tracker count: %d\n", SIZE);
+	strcpy(name,s);
 	debug = debug_mode;
-	for(int i=0;i<SIZE;++i)
+	size = n;
+
+	if(debug)
+		fprintf(stderr, "Multi-stream prefetcher, tracker count: %d\n", size);
+	trackers = (tracker_t*)malloc(size*sizeof(tracker_t));
+	ASSERT(trackers!=NULL,"Tracker allocation failed\n");
+	for(int i=0;i<size;++i)
 		trackers[i].valid = false;
 	last_prefetched_line = 0;
+
+	stat_total_mem_access = 0;
+	stat_total_prefetch = 0;
+	stat_total_prefetch_hit2 = 0;
+	stat_heart_beat_prefetch = 0;
+	stat_heart_beat_prefetch_hit2 = 0;
 }
 
-int prefetcher_operate(unsigned int pc, unsigned int addr, unsigned int *prefAddr)
+int StreamPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsigned int *prefAddr)
 {
 	unsigned int page = (addr >> PAGE_SIZE_LOG);
 	unsigned int line_offset = ((addr >> LINE_SIZE_LOG) & 63);
@@ -69,20 +44,17 @@ int prefetcher_operate(unsigned int pc, unsigned int addr, unsigned int *prefAdd
 		if(debug) fprintf(stderr, "Same line as last\n");
 		return -1;
 	}
-		
-
-	if(line == last_prefetched_line )
-	{
-		if(debug) fprintf(stderr, "[HIT] LPL:%d CRL:%d\n", last_prefetched_line, line);
-		stat_total_prefetch_hit++;
-		stat_heart_beat_prefetch_hit++;
-	}
 
 	/* Prefetch hit second calculation */
 	it = prefetch_map.find(page);
 	if(it != prefetch_map.end() && it->second->last_line != line)
 	{
-		if(it->second->prefetch_line == line) { stat_total_prefetch_hit2++; stat_heart_beat_prefetch_hit2++;}
+		if(it->second->prefetch_line == line)
+		{
+			if(debug) fprintf(stderr, "[HIT] LPL:%d CRL:%d\n", it->second->prefetch_line, line);
+			stat_total_prefetch_hit2++; 
+			stat_heart_beat_prefetch_hit2++;
+		}
 		prefetch_map.erase(it);
 	}
 	
@@ -90,7 +62,7 @@ int prefetcher_operate(unsigned int pc, unsigned int addr, unsigned int *prefAdd
 	last_accessed_line = line;
 
 	int index = -1;
-	for(int i=0;i<SIZE;++i)
+	for(int i=0;i<size;++i)
 	{
 		if(trackers[i].valid && trackers[i].page == page)
 		{
@@ -104,7 +76,7 @@ int prefetcher_operate(unsigned int pc, unsigned int addr, unsigned int *prefAdd
 	{
 		if(debug) fprintf(stderr, "HC Miss\n");
 		int maxAge = -1, repIndex = -1;
-		for(int i=0;i<SIZE;++i)
+		for(int i=0;i<size;++i)
 		{
 			if(!trackers[i].valid)
 			{
@@ -125,7 +97,7 @@ int prefetcher_operate(unsigned int pc, unsigned int addr, unsigned int *prefAdd
 		trackers[index].stride = 0;
 		trackers[index].age = 0;
 		trackers[index].valid = true;
-		for(int i=0;i<SIZE;++i){if(i!=index) trackers[i].age++;}
+		for(int i=0;i<size;++i){if(i!=index) trackers[i].age++;}
 		if(debug) fprintf(stderr, "HC insert, P:%x LL:%d S:%d A:%d v:%d\n", trackers[index].page,
 																			trackers[index].last_line,
 																			trackers[index].stride,
@@ -144,7 +116,7 @@ int prefetcher_operate(unsigned int pc, unsigned int addr, unsigned int *prefAdd
 																			trackers[index].valid);
 		trackers[index].age = 0;
 		trackers[index].valid = true;
-		for(int i=0;i<SIZE;++i){if(i!=index) trackers[i].age++;}
+		for(int i=0;i<size;++i){if(i!=index) trackers[i].age++;}
 
 		bool steady = false;
 		int line_stride = line_offset - trackers[index].last_line;
@@ -182,26 +154,26 @@ int prefetcher_operate(unsigned int pc, unsigned int addr, unsigned int *prefAdd
 	}
 }
 
-void prefetcher_heartbeat_stats()
+void StreamPrefetcher::prefetcher_heartbeat_stats()
 {
-	fprintf(stdout, "Prefetch: %*d ", 6, stat_heart_beat_prefetch);
-	fprintf(stdout, "Hit: %*d ", 6, stat_heart_beat_prefetch_hit);
-	fprintf(stdout, "Hit2: %*d [%0.2f]\n", 6, stat_heart_beat_prefetch_hit2, (float)stat_heart_beat_prefetch_hit2/stat_heart_beat_prefetch*100);
+	fprintf(stderr, "%s.Prefetch: %*d ", name, 6, stat_heart_beat_prefetch);
+	fprintf(stderr, "%s.Hit: %*d [%0.2f] ", name, 6, stat_heart_beat_prefetch_hit2, (float)stat_heart_beat_prefetch_hit2/stat_heart_beat_prefetch*100);
 	stat_heart_beat_prefetch = 0;
-	stat_heart_beat_prefetch_hit = 0;
 	stat_heart_beat_prefetch_hit2 = 0;
 }
 
-void prefetcher_final_stats()
+void StreamPrefetcher::prefetcher_final_stats()
 {
-	fprintf(stdout, "Trackers: %d\n", SIZE);
-	fprintf(stdout, "Total memory accesses: %d\n", stat_total_mem_access);
-	fprintf(stdout, "Total prefetch: %d \n", stat_total_prefetch);
-	fprintf(stdout, "Total prefetch hit: %d [%0.2f]\n", stat_total_prefetch_hit, (float)stat_total_prefetch_hit/stat_total_prefetch*100);
-	fprintf(stdout, "Total prefetch hit2: %d [%0.2f]\n", stat_total_prefetch_hit2, (float)stat_total_prefetch_hit2/stat_total_prefetch*100);
+	fprintf(stdout, "[ Prefetcher.%s ]\n", name);
+	fprintf(stdout, "Type = Multi-stream\n");
+	fprintf(stdout, "Trackers = %d\n", size);
+	fprintf(stdout, "TotalAccess = %d\n", stat_total_mem_access);
+	fprintf(stdout, "TotalPrefetch = %d \n", stat_total_prefetch);
+	fprintf(stdout, "TotalPrefetchHit = %d [%0.2f]\n", stat_total_prefetch_hit2, (float)stat_total_prefetch_hit2/stat_total_prefetch*100);
 }
 
-void prefetcher_destroy()
+void StreamPrefetcher::prefetcher_destroy()
 {
-	if(debug)fprintf(stderr, "Deallocating stream prefetcher\n");
+	if(debug)
+		fprintf(stderr, "Deallocating prefetcher.%s\n", name);
 }
