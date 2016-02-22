@@ -4,14 +4,14 @@ PREFETCHER = prefetcher
 CACHE = cache
 
 
-all: stream
+all: sim
 
-stream: $(MAIN)
+sim: $(MAIN)
 	@cd $(PREFETCHER) && make
 	@cd $(CACHE) && make
-	$(CC) -o2 -o sim_stream $(MAIN) $(PREFETCHER)/stream_prefetcher.o -lz	
+	$(CC) -o2 -Wno-write-strings -o sim $(MAIN) $(PREFETCHER)/StreamPrefetcher.o $(PREFETCHER)/SMSPrefetcher.o $(CACHE)/BaseCache.o $(CACHE)/LRUCache.o -lz	
 
 clean:
 	@cd $(PREFETCHER) && make clean
 	@cd $(CACHE) && make clean
-	@rm -f sim_stream
+	@rm -f sim

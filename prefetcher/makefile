@@ -1,11 +1,11 @@
 CC = g++
-CORE = stream_prefetcher.o stride_prefetcher.o stride_cache_prefetcher.o pc_cs_prefetcher.o
+CORE = StreamPrefetcher.o SMSPrefetcher.o
 
 all: $(CORE)
 
 %.o: %.cpp 
 	@echo "Making $@..."
-	@$(CC) -c -o $@ $<
+	@$(CC) -c -o2 -o $@ $<
 
 clean:
 	@echo "Cleaning prefetcher directory..."

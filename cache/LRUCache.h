@@ -12,11 +12,12 @@ class LRUCache : public BaseCache
         LRUCache(char*,unsigned int,unsigned int,unsigned int);
         ~LRUCache();
         int find(unsigned int,unsigned int);
-        void promotion(unsigned int,unsigned int);
+        int find(unsigned int);
+        void promotion(unsigned int,unsigned int, bool);
         unsigned int victimize(unsigned int);
         void eviction(unsigned int,unsigned int);
-        void insertion(unsigned int,unsigned int,unsigned int);
-        int update(unsigned int);
+        void insertion(unsigned int,unsigned int,unsigned int, bool);
+        int update(unsigned int, bool);
 
 };
 

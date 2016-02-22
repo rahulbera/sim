@@ -3,7 +3,9 @@
 #include <zlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include "prefetcher/prefetcher.h"
+#include "prefetcher/StreamPrefetcher.h"
+#include "prefetcher/SMSPrefetcher.h"
+#include "cache/LRUCache.h"
 
 #define B 1
 #define KB (1024*B)
@@ -16,24 +18,30 @@ static int heart_beat;
 static bool hide_heart_beat;
 static bool hasBegin;
 static bool hasEnd;
+static bool prefetcher_on;
+static bool cache_on;
 static unsigned int begin, end;
 static unsigned int count; 
 static char help[1000] = 
 				"Supported knobs:\n"
 				"--trace <file>\n"
 				"	It's a mandatory knob. Sim will not run without a trace file.\n"
-				"--trace-dump\n"
-				"	Dumps memtrace in stderr. Default false\n"
-				"--debug\n"
-				"	Enables debugging mode. Dumps debug log in stderr. Default false\n"
 				"--hearbeat <int>\n"
 				"	Sets heartbeat interval to supplied value. Default 1,000,000\n"
-				"--hide-heartbeat\n"
-				"	Hides heart beat stats. Default false\n"
 				"--begin <n>\n"
 				"	Begins trace processing from here. Default 1\n"
 				"--end <n>\n"
-				"	Ends trace processing here. Default till end\n";
+				"	Ends trace processing here. Default till end.\n"
+				"--trace-dump\n"
+				"	Dumps memtrace in stderr.\n"
+				"--debug\n"
+				"	Enables debugging mode. Dumps debug log in stderr.\n"
+				"--hide-heartbeat\n"
+				"	Hides heart beat stats.\n"
+				"--no-prefetch\n"
+				"	Disables prefetcher.\n"
+				"--no-cache\n"
+				"	Disables cache hierarchy.\n";
 
 void sim_parse_command_line(int argc, char *argv[])
 {
@@ -59,6 +67,8 @@ void sim_parse_command_line(int argc, char *argv[])
 		if(!strcmp(argv[i], "--trace-dump"))
 		{
 			trace_dump = true;
+			prefetcher_on = false;
+			cache_on = false;
 			continue;
 		}
 		if(!strcmp(argv[i], "--debug"))
@@ -88,6 +98,16 @@ void sim_parse_command_line(int argc, char *argv[])
 			end = atoi(argv[++i]);
 			continue;
 		}
+		if(!strcmp(argv[i], "--no-prefetch"))
+		{
+			prefetcher_on = false;
+			continue;
+		}
+		if(!strcmp(argv[i], "--no-cache"))
+		{
+			cache_on = false;
+			continue;
+		}
 		
 		fprintf(stderr, "Invalid knob %s\n", argv[i]);
 		fprintf(stderr, "%s\n", help);
@@ -103,6 +123,8 @@ void sim_init()
 	heart_beat = 10000000;
 	hasBegin = false;
 	hasEnd = false;
+	prefetcher_on = true;
+	cache_on = true;
 	count = 0;
 }
 
@@ -118,11 +140,18 @@ int main(int argc, char *argv[])
 	gfp = gzopen(trace_file_name,"r");
 	ASSERT(gfp!=Z_NULL,"Can't open file\n");
 
-	prefetcher_init(debug);
+	LRUCache l1 = LRUCache("L1D", 4, 64*B, 32*KB);
+	LRUCache l2 = LRUCache("L2", 16, 64*B, 2*MB);
+	
+	StreamPrefetcher sp;
+	sp.prefetcher_init("Uni",debug, 64);
+	SMSPrefetcher smsp;
+	smsp.prefetcher_init("SMS",debug, 16, 32, 1024);
 
 	unsigned int pc, addr, prefAddr;
+	unsigned int *prefList; int size;
 	bool isRead;
-	int n;
+	int n, res;
 	while(gzread(gfp,(void*)(&pc),sizeof(unsigned int)) != 0)
 	{
 		count++;
@@ -136,22 +165,58 @@ int main(int argc, char *argv[])
 		if(hasEnd && count>end)
 			break;
 		
-		if (trace_dump) fprintf(stderr, "%*x %*x %*d P:%*x L:%*x LO:%*d\n", 7, pc, 8, addr, 1, isRead, 5, addr>>12, 7, addr>>6, 2, (addr>>6)&63);
-		if (debug) fprintf(stderr, "[ No:%d ]\n%x %x %d\n", count+2, pc, addr, isRead);		
-		prefetcher_operate(pc, addr, (&prefAddr));;
+		if (trace_dump) 
+		{
+			fprintf(stderr, "%*x %*x %*d P:%*x L:%*x LO:%*d\n", 7, pc, 8, addr, 1, isRead, 5, addr>>12, 7, addr>>6, 2, (addr>>6)&63);
+			continue;
+		}
+
+		if (debug) 
+			fprintf(stderr, "[ No:%d ]\n%x %x %d\n", count, pc, addr, isRead);		
+		
+		if(cache_on)
+		{
+			if(l1.find(addr)==-1)
+				l2.update(addr,false);
+			l1.update(addr,false);
+		}
+
+		if(prefetcher_on)
+		{
+			//res = sp.prefetcher_operate(pc, addr, (&prefAddr));
+			//l2.update(prefAddr,true);
+			res = smsp.prefetcher_operate(pc, addr, (&prefList), &size);
+			if(res != -1 && cache_on)
+			{
+				for(int i=0;i<size;++i)
+					l2.update(prefList[i],true);
+			}
+		}
+		
 
 		if(!hide_heart_beat && (count%heart_beat)==0)
 		{
 			fprintf(stderr, "Processed: %*d ", 3, count/heart_beat);
-			prefetcher_heartbeat_stats();
+			if(prefetcher_on) 
+				//sp.prefetcher_heartbeat_stats();
+				smsp.prefetcher_heartbeat_stats();
+			fprintf(stderr,"\n");
 		}
 		
 	}
 
-	fprintf(stdout, "[ Prefetcher ]\n");
-	prefetcher_final_stats();
+	if(cache_on)
+	{
+		l1.final_stats(0);
+		l2.final_stats(0);
+	}
+	if(prefetcher_on)
+		//sp.prefetcher_final_stats();
+		smsp.prefetcher_final_stats();
 
-	prefetcher_destroy();
+	if(prefetcher_on)
+		//sp.prefetcher_destroy();
+		smsp.prefetcher_destroy();
 
 	return 0;
 }

@@ -21,7 +21,6 @@ unsigned int BaseCache::log2(unsigned int n)
 BaseCache::BaseCache(char *s, unsigned int a,unsigned int b,unsigned int c)
 {
     strcpy(name, s);
-    fprintf(stderr, "Blah\n");
     associativity=a;
     noOfSets = c/(a*b);
     setsInPowerOfTwo = log2(noOfSets);
@@ -36,6 +35,7 @@ BaseCache::BaseCache(char *s, unsigned int a,unsigned int b,unsigned int c)
     }
     
     totalAccess = hit = miss = 0;
+    totalPrefetchedLines = totalPrefetchedLinesHit = totalPrefetchedUnusedLines = 0;
     for(unsigned int i=0;i<16;++i) reuseCountBucket[i] = 0;
 }
 
@@ -55,6 +55,9 @@ void BaseCache::final_stats(int verbose)
     fprintf(stdout, "TotalAccesses =  %d\n", totalAccess);
     fprintf(stdout, "Hits =  %d\n", hit);
     fprintf(stdout, "Misses =  %d [%0.2f]\n", miss, (float)miss/totalAccess*100);
+    fprintf(stdout, "Prefetched = %d\n", totalPrefetchedLines);
+    fprintf(stdout, "PrefetchedUnused = %d\n", totalPrefetchedUnusedLines);
+    fprintf(stdout, "PrefetchedLinesHit = %d\n", totalPrefetchedLinesHit);
     if(verbose > 0)
     {
         fprintf(stdout, "Reuse count stats:\n");
