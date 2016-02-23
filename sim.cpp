@@ -129,7 +129,6 @@ void sim_init()
 }
 
 
-
 int main(int argc, char *argv[])
 {
 	sim_init();
@@ -140,17 +139,19 @@ int main(int argc, char *argv[])
 	gfp = gzopen(trace_file_name,"r");
 	ASSERT(gfp!=Z_NULL,"Can't open file\n");
 
+	/* Cache specification */
 	LRUCache l1 = LRUCache("L1D", 4, 64*B, 32*KB);
 	LRUCache l2 = LRUCache("L2", 16, 64*B, 2*MB);
 	
+	/* Prefetcher specification */
 	StreamPrefetcher sp;
 	sp.prefetcher_init("Uni",debug, 64);
 	SMSPrefetcher smsp;
-	smsp.prefetcher_init("SMS",debug, 16, 32, 1024);
+	smsp.prefetcher_init("SMS",debug, 16, 16, 1024);
 
 	unsigned int pc, addr, prefAddr;
 	unsigned int *prefList; int size;
-	bool isRead;
+	bool isRead, foundInL1;
 	int n, res;
 	while(gzread(gfp,(void*)(&pc),sizeof(unsigned int)) != 0)
 	{
@@ -174,23 +175,28 @@ int main(int argc, char *argv[])
 		if (debug) 
 			fprintf(stderr, "[ No:%d ]\n%x %x %d\n", count, pc, addr, isRead);		
 		
+		foundInL1 = true;
 		if(cache_on)
 		{
-			if(l1.find(addr)==-1)
+			if(l1.find(addr) == -1)
+			{
+				foundInL1 = false;
 				l2.update(addr,false);
+			}
 			l1.update(addr,false);
 		}
 
 		if(prefetcher_on)
 		{
-			//res = sp.prefetcher_operate(pc, addr, (&prefAddr));
-			//l2.update(prefAddr,true);
-			res = smsp.prefetcher_operate(pc, addr, (&prefList), &size);
+			res = sp.prefetcher_operate(pc, addr, (&prefAddr));
+			if(res != -1 && cache_on) 
+				l2.update(prefAddr,true);
+			/*res = smsp.prefetcher_operate(pc, addr, (&prefList), &size);
 			if(res != -1 && cache_on)
 			{
 				for(int i=0;i<size;++i)
 					l2.update(prefList[i],true);
-			}
+			}*/
 		}
 		
 
@@ -198,8 +204,8 @@ int main(int argc, char *argv[])
 		{
 			fprintf(stderr, "Processed: %*d ", 3, count/heart_beat);
 			if(prefetcher_on) 
-				//sp.prefetcher_heartbeat_stats();
-				smsp.prefetcher_heartbeat_stats();
+				sp.prefetcher_heartbeat_stats();
+				//smsp.prefetcher_heartbeat_stats();
 			fprintf(stderr,"\n");
 		}
 		
@@ -211,12 +217,12 @@ int main(int argc, char *argv[])
 		l2.final_stats(0);
 	}
 	if(prefetcher_on)
-		//sp.prefetcher_final_stats();
-		smsp.prefetcher_final_stats();
+		sp.prefetcher_final_stats();
+		//smsp.prefetcher_final_stats();
 
 	if(prefetcher_on)
-		//sp.prefetcher_destroy();
-		smsp.prefetcher_destroy();
+		sp.prefetcher_destroy();
+		//smsp.prefetcher_destroy();
 
 	return 0;
 }

@@ -1,11 +1,11 @@
 CC = g++
 CORE = StreamPrefetcher.o SMSPrefetcher.o
+CCFLAGS = -g -o2
 
 all: $(CORE)
 
 %.o: %.cpp 
-	@echo "Making $@..."
-	@$(CC) -c -o2 -o $@ $<
+	@$(CC) -c $(CCFLAGS) -o $@ $<
 
 clean:
 	@echo "Cleaning prefetcher directory..."
