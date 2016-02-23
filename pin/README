@@ -1,0 +1,21 @@
+ia32 directory contains pintool for 32bit binaries, whereas intel64 contains tool for 64bit.
+It was created using PIN 2.14, and may require installing libdwarf.so, 
+libelf.so, or other libraries, if you do not already have them.  Please
+refer to Pin documentation for working with Pin 2.14.
+
+Use pintool like this:
+
+	pin -t <tool_path> -controller_skip <skip> -controller_length <length> -o <outfile> -- <binary>
+
+Supported knobs are:
+
+-controller_skip <n> 	: Number of instructions to skip. Provide value 1 or more than that.
+-controller_length <n>	: Number of instructions to instrument.
+-o <str>		: Output file name. Give name in format *.gz
+	
+For example, you could trace 200,000 instructions of the program ls, after
+skipping the first 100,000 instructions, with this command:
+
+pin -t intel64/control.so -o ls.trace.gz -controller_skip 100000 -controller_length 200000 -- ls
+
+Traces created with this tool are in binary format and captured before L1 level cache.
