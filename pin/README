@@ -18,4 +18,4 @@ skipping the first 100,000 instructions, with this command:
 
 pin -t intel64/control.so -o ls.trace.gz -controller_skip 100000 -controller_length 200000 -- ls
 
-Traces created with this tool are in binary format and captured before L1 level cache.
+Traces created with this tool are in binary format and captured without cache hierarchy implemented.

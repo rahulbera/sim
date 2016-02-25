@@ -15,3 +15,4 @@ clean:
 	@cd $(PREFETCHER) && make clean
 	@cd $(CACHE) && make clean
 	@rm -f sim
+	@rm -f analysis

@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
 	StreamPrefetcher sp;
 	sp.prefetcher_init("Uni",debug, 64);
 	SMSPrefetcher smsp;
-	smsp.prefetcher_init("SMS",debug, 16, 16, 1024);
+	smsp.prefetcher_init("SMS",debug, 16, 32, 4*1024, 4);
 
 	unsigned int pc, addr, prefAddr;
 	unsigned int *prefList; int size;
@@ -188,15 +188,16 @@ int main(int argc, char *argv[])
 
 		if(prefetcher_on)
 		{
-			res = sp.prefetcher_operate(pc, addr, (&prefAddr));
+			/*res = sp.prefetcher_operate(pc, addr, (&prefAddr));
 			if(res != -1 && cache_on) 
 				l2.update(prefAddr,true);
-			/*res = smsp.prefetcher_operate(pc, addr, (&prefList), &size);
+			*/
+			res = smsp.prefetcher_operate(pc, addr, (&prefList), &size);
 			if(res != -1 && cache_on)
 			{
 				for(int i=0;i<size;++i)
 					l2.update(prefList[i],true);
-			}*/
+			}
 		}
 		
 
@@ -204,8 +205,8 @@ int main(int argc, char *argv[])
 		{
 			fprintf(stderr, "Processed: %*d ", 3, count/heart_beat);
 			if(prefetcher_on) 
-				sp.prefetcher_heartbeat_stats();
-				//smsp.prefetcher_heartbeat_stats();
+				//sp.prefetcher_heartbeat_stats();
+				smsp.prefetcher_heartbeat_stats();
 			fprintf(stderr,"\n");
 		}
 		
@@ -217,12 +218,12 @@ int main(int argc, char *argv[])
 		l2.final_stats(0);
 	}
 	if(prefetcher_on)
-		sp.prefetcher_final_stats();
-		//smsp.prefetcher_final_stats();
+		//sp.prefetcher_final_stats();
+		smsp.prefetcher_final_stats();
 
 	if(prefetcher_on)
-		sp.prefetcher_destroy();
-		//smsp.prefetcher_destroy();
+		//sp.prefetcher_destroy();
+		smsp.prefetcher_destroy();
 
 	return 0;
 }

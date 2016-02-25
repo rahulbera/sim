@@ -5,7 +5,7 @@ CCFLAGS = -g -o2
 all: $(CORE)
 
 %.o: %.cpp
-	@$(CC) -c $(CCFLAGS) -o $@ $<
+	$(CC) -c $(CCFLAGS) -o $@ $<
 
 clean:
 	@echo "Cleaning cache directory..."
