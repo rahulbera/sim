@@ -14,15 +14,14 @@ unsigned int SMSPrefetcher::log2(unsigned int n)
     else return (1+log2(n/2));
 }
 
-void SMSPrefetcher::prefetcher_init(char *name, bool d, int n)
+void SMSPrefetcher::prefetcher_init(char *name, int n)
 {
 
 }
 
-void SMSPrefetcher::prefetcher_init(char *s, bool d, unsigned int acc_size, unsigned int fil_size, unsigned int pht_size, unsigned int pht_assoc)
+void SMSPrefetcher::prefetcher_init(char *s, unsigned int acc_size, unsigned int fil_size, unsigned int pht_size, unsigned int pht_assoc)
 {
 	strcpy(name,s);
-	debug = d;
 	acc_table_size = acc_size;
 	filter_table_size = fil_size;
 	pht_table_size = pht_size;
@@ -30,8 +29,10 @@ void SMSPrefetcher::prefetcher_init(char *s, bool d, unsigned int acc_size, unsi
 	pht_table_sets = pht_size/pht_assoc;
 	pht_table_sets_log = log2(pht_table_sets);
 	
-	if(debug) fprintf(stderr, "S:%d A:%d S:%d SL:%d\n", pht_table_size, pht_table_assoc, pht_table_sets, pht_table_sets_log);
-	if(debug) fprintf(stderr, "RL:%d LL:%d OF:%d MO:%d\n", REGION_SIZE_LOG, LINE_SIZE_LOG, OFFSET_LOG, MAX_OFFSET);
+	#ifdef DEBUG
+		fprintf(stderr, "S:%d A:%d S:%d SL:%d\n", pht_table_size, pht_table_assoc, pht_table_sets, pht_table_sets_log);
+		fprintf(stderr, "RL:%d LL:%d OF:%d MO:%d\n", REGION_SIZE_LOG, LINE_SIZE_LOG, OFFSET_LOG, MAX_OFFSET);
+	#endif
 
 	filter_table = (entry_t*)malloc(filter_table_size*sizeof(entry_t));
 	ASSERT(filter_table!=NULL, "Filter table allocation failed!\n");
@@ -89,7 +90,9 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	unsigned int offset = ((addr>>LINE_SIZE_LOG) & (MAX_OFFSET-1));
 	int index;
 
-	if(debug) fprintf(stderr, "R:%x O:%d\n", region, offset);
+	#ifdef DEBUG 
+		fprintf(stderr, "R:%x O:%d\n", region, offset);
+	#endif
 	/* Search for the entry in accumulation table */
 	index = -1;
 	for(int i=0;i<acc_table_size;++i)
@@ -102,20 +105,23 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	}
 	if(index != -1) /* Hit in accumulation table */
 	{
-		if(debug)
-		{
+		#ifdef DEBUG
 			fprintf(stderr, "Hit acc table:%d\n", index);
 			debug_acc_entry(index);
-		}
+		#endif
 		acc_table[index].pattern[offset] = true;
 		for(int i=0;i<acc_table_size;++i) acc_table[i].age++;
 		acc_table[index].age = 0;
-		if(debug) debug_acc_entry(index);
+		#ifdef DEBUG 
+			debug_acc_entry(index);
+		#endif
 		return -1;
 	}
 
 	/* If it is not found in accumulation table, search in filter table */
-	if(debug) fprintf(stderr, "Miss acc table\n");
+	#ifdef DEBUG 
+		fprintf(stderr, "Miss acc table\n");
+	#endif
 	index = -1;
 	for(int i=0;i<filter_table_size;++i)
 	{
@@ -127,15 +133,16 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	}
 	if(index != -1) /* Hit in filter table */
 	{
-		if(debug) 
-		{
+		#ifdef DEBUG
 			fprintf(stderr, "Hit fiter table:%d\n", index);
-			if(debug) debug_fil_entry(index);
-		}
+			debug_fil_entry(index);
+		#endif
 		/* Check if it is the same offset access */
 		if(filter_table[index].offset == offset)
 		{
-			if(debug) fprintf(stderr, "Same offset acc, exiting!\n");
+			#ifdef DEBUG 
+				fprintf(stderr, "Same offset acc, exiting!\n");
+			#endif
 			return -1;
 		}
 
@@ -158,14 +165,18 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 			}
 		}
 		ASSERT(repIndex!=-1, "Invalid victim selection in Accumulation table\n");
-		if(debug) fprintf(stderr, "Rep index in acc:%d\n", repIndex);
-		if(debug) debug_acc_entry(repIndex);
+		#ifdef DEBUG 
+			fprintf(stderr, "Rep index in acc:%d\n", repIndex);
+			debug_acc_entry(repIndex);
+		#endif
 		/* Found an invalid entry in acc table,
 		 * no need to copy back the pattern to PHT
 		 */
 		if(foundInvalidEntry)
 		{
-			if(debug) fprintf(stderr, "%d is invalid\n", repIndex);
+			#ifdef DEBUG 
+				fprintf(stderr, "%d is invalid\n", repIndex);
+			#endif
 			acc_table[repIndex].tag = filter_table[index].tag;
 			acc_table[repIndex].pc = filter_table[index].pc;
 			acc_table[repIndex].offset = filter_table[index].offset;
@@ -175,7 +186,9 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 			for(int i=0;i<acc_table_size;++i) acc_table[i].age++;
 			acc_table[repIndex].age = 0;
 			filter_table[index].valid = false;
-			if(debug) debug_acc_entry(repIndex);
+			#ifdef DEBUG 
+				debug_acc_entry(repIndex);
+			#endif
 			return -1;
 		}
 
@@ -202,16 +215,23 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 		}
 		if(repIndex2 != -1) /* Hit in PHT */
 		{
-			if(debug) {fprintf(stderr, "Hit in PHT:%d\n", repIndex2); debug_pht_entry(setIndex,repIndex2);}
+			#ifdef DEBUG 
+				fprintf(stderr, "Hit in PHT:%d\n", repIndex2); 
+				debug_pht_entry(setIndex,repIndex2);
+			#endif
 			for(int i=0;i<MAX_OFFSET;++i) pht_table[setIndex][repIndex2].pattern[i] = acc_table[repIndex].pattern[i];
 			for(int i=0;i<pht_table_assoc;++i) pht_table[setIndex][i].age++;
 			pht_table[setIndex][repIndex2].age = 0;
 			acc_table[repIndex].valid = false;
-			if(debug) debug_pht_entry(setIndex,repIndex2);
+			#ifdef DEBUG 
+				debug_pht_entry(setIndex,repIndex2);
+			#endif
 		}
 		else /* Miss in PHT */
 		{
-			if(debug) fprintf(stderr, "Miss in PHT\n");
+			#ifdef DEBUG 
+				fprintf(stderr, "Miss in PHT\n");
+			#endif
 			repIndex2 = -1;
 			for(int i=0;i<pht_table_assoc;++i)
 			{
@@ -227,7 +247,10 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 				}
 			}
 			ASSERT(repIndex2!=-1, "Invalid victim selection in PHT table\n");
-			if(debug) {fprintf(stderr, "Rep index in PHT:%d\n", repIndex2); debug_pht_entry(setIndex,repIndex2);}
+			#ifdef DEBUG 
+				fprintf(stderr, "Rep index in PHT:%d\n", repIndex2); 
+				debug_pht_entry(setIndex,repIndex2);
+			#endif
 			if(pht_table[setIndex][repIndex2].valid) stat_total_pht_table_rep++;
 			pht_table[setIndex][repIndex2].tag = tag;
 			for(int i=0;i<MAX_OFFSET;++i) pht_table[setIndex][repIndex2].pattern[i] = acc_table[repIndex].pattern[i];
@@ -235,7 +258,9 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 			for(int i=0;i<pht_table_assoc;++i) pht_table[setIndex][i].age++;
 			pht_table[setIndex][repIndex2].age = 0;
 			acc_table[repIndex].valid = false;
-			if(debug) debug_pht_entry(setIndex,repIndex2);
+			#ifdef DEBUG 
+				debug_pht_entry(setIndex,repIndex2);
+			#endif
 		}
 		acc_table[repIndex].tag = filter_table[index].tag;
 		acc_table[repIndex].pc = filter_table[index].pc;
@@ -246,7 +271,9 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 		acc_table[repIndex].age = 0;
 		acc_table[repIndex].valid = true;
 		filter_table[index].valid = false;
-		if(debug) debug_acc_entry(repIndex);
+		#ifdef DEBUG 
+			debug_acc_entry(repIndex);
+		#endif
 		return -1;
 		
 	}
@@ -255,7 +282,9 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	 * inside accumulation table, or filter table.
 	 * which says, it's a start of a new generation.
 	 */
-	if(debug) fprintf(stderr, "Misses both table. Trigger access, start of new gen.\n");
+	#ifdef DEBUG 
+	 	fprintf(stderr, "Misses both table. Trigger access, start of new gen.\n");
+	#endif
 	
 	/* First allocate in filter table */
 	int repIndex = -1;
@@ -274,8 +303,10 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 		}
 	}
 	ASSERT(repIndex!=-1, "Invalid victim selection in filter table");
-	if(debug) fprintf(stderr, "Rep index in fil table:%d\n", repIndex);
-	if(debug) debug_fil_entry(repIndex);
+	#ifdef DEBUG 
+		fprintf(stderr, "Rep index in fil table:%d\n", repIndex);
+		debug_fil_entry(repIndex);
+	#endif
 	filter_table[repIndex].tag = region;
 	filter_table[repIndex].pc = pc;
 	filter_table[repIndex].offset = offset;
@@ -284,12 +315,16 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	filter_table[repIndex].valid = true;
 	for(int i=0;i<filter_table_size;++i) filter_table[i].age++;
 	filter_table[repIndex].age = 0;
-	if(debug) debug_fil_entry(repIndex);
+	#ifdef DEBUG 
+		debug_fil_entry(repIndex);
+	#endif
 
 	/* Now check in PHT if there is any 
 	 * learnt pattern for this trigger access
 	 */
-	if(debug) fprintf(stderr, "Trigger access, checking PHT\n");
+	#ifdef DEBUG 
+		fprintf(stderr, "Trigger access, checking PHT\n");
+	#endif
 	unsigned long int temp = (pc << OFFSET_LOG) + offset;
 	unsigned int setIndex = temp & (pht_table_sets - 1);
 	unsigned int tag = temp >> pht_table_sets_log;
@@ -304,13 +339,20 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	}
 	if(index == -1)
 	{
-		if(debug) fprintf(stderr, "No learnt pattern found. No prefetch.\n");
+		#ifdef DEBUG 
+			fprintf(stderr, "No learnt pattern found. No prefetch.\n");
+		#endif
 		return -1;
 	}
-	if(debug) {fprintf(stderr, "Access found in PHT:%d\n", index); debug_pht_entry(setIndex,index);}
+	#ifdef DEBUG 
+		fprintf(stderr, "Access found in PHT:%d\n", index); 
+		debug_pht_entry(setIndex,index);
+	#endif
 	int n = 0;
 	for(int i=0;i<MAX_OFFSET;++i) {if(pht_table[setIndex][index].pattern[i]) n++;}
-	if(debug) fprintf(stderr, "Prefetch %d\n", n);
+	#ifdef DEBUG 
+		fprintf(stderr, "Prefetch %d\n", n);
+	#endif
 	unsigned int *prefList = (unsigned int*)malloc(n*sizeof(unsigned int));
 	ASSERT(prefList!=NULL, "Pref list allocation failed!\n");
 	int k = 0;
@@ -319,14 +361,18 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 		if(pht_table[setIndex][index].pattern[i])
 		{
 			prefList[k] = (region << REGION_SIZE_LOG) + (i << LINE_SIZE_LOG);
-			if(debug) fprintf(stderr, "%x ", prefList[k]);
+			#ifdef DEBUG 
+				fprintf(stderr, "%x ", prefList[k]);
+			#endif
 			k++;
 		}
 	}
 	(*prefAddr) = prefList;
 	(*size) = n;
 	stat_total_prefetch += n;
-	if(debug) fprintf(stderr, "\n");
+	#ifdef DEBUG 
+		fprintf(stderr, "\n");
+	#endif
 
 	return 1;
 }
@@ -352,7 +398,9 @@ void SMSPrefetcher::prefetcher_final_stats()
 
 void SMSPrefetcher::prefetcher_destroy()
 {
-	if(debug) fprintf(stderr, "Deallocating prefetcher.%s\n", name);
+	#ifdef DEBUG 
+		fprintf(stderr, "Deallocating prefetcher.%s\n", name);
+	#endif
 }
 
 void SMSPrefetcher::debug_acc_entry(int index)

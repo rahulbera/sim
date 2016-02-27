@@ -88,17 +88,30 @@ int LRUCache::update(unsigned int addr, bool isPrefetched)
     unsigned int setIndex = temp & (noOfSets-1);
     unsigned int tag = temp >> setsInPowerOfTwo;
 
-    if(!isPrefetched) totalAccess++;
+    if(!isPrefetched) 
+    {
+
+        totalAccess++;
+        stat_heart_beat_total_access++;
+    }
     int wayIndex = find(setIndex,tag);
     if(wayIndex != -1)
     {
-        if(!isPrefetched) hit++;
-        if(!isPrefetched) promotion(setIndex,wayIndex, isPrefetched);
+        if(!isPrefetched)
+        {
+            hit++;
+            stat_heart_beat_hit++;
+            promotion(setIndex,wayIndex, isPrefetched);
+        }
         return 1;
     }        
     else
     {
-        if(!isPrefetched) miss++;
+        if(!isPrefetched) 
+        {
+            miss++;
+            stat_heart_beat_miss++;
+        }
         unsigned int victimWayIndex = victimize(setIndex);
         if(cache[setIndex][victimWayIndex].valid)
             eviction(setIndex,victimWayIndex);

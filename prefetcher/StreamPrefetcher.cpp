@@ -4,14 +4,14 @@
 #include <string.h>
 #include "StreamPrefetcher.h"
 
-void StreamPrefetcher::prefetcher_init(char *s, bool debug_mode, int n)
+void StreamPrefetcher::prefetcher_init(char *s, int n)
 {
 	strcpy(name,s);
-	debug = debug_mode;
 	size = n;
 
-	if(debug)
+	#ifdef DEBUG
 		fprintf(stderr, "Multi-stream prefetcher, tracker count: %d\n", size);
+	#endif
 	trackers = (tracker_t*)malloc(size*sizeof(tracker_t));
 	ASSERT(trackers!=NULL,"Tracker allocation failed\n");
 	for(int i=0;i<size;++i)
@@ -33,15 +33,19 @@ int StreamPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, uns
 	
 	stat_total_mem_access++;
 	
-	if(debug) fprintf(stderr, "P:%x L:%x LO:%d\n", page, line, line_offset);
-	if(debug) fprintf(stderr, "LAL:%x LPL:%x\n", last_accessed_line, last_prefetched_line);
+	#ifdef DEBUG 
+		fprintf(stderr, "P:%x L:%x LO:%d\n", page, line, line_offset);
+		fprintf(stderr, "LAL:%x LPL:%x\n", last_accessed_line, last_prefetched_line);
+	#endif
 
 	/*	If it's accessing the same cache line as the previous one
 	 *	ignore access, and don't train prefetcher
 	 */
 	if(line == last_accessed_line)
 	{
-		if(debug) fprintf(stderr, "Same line as last\n");
+		#ifdef DEBUG 
+			fprintf(stderr, "Same line as last\n");
+		#endif
 		return -1;
 	}
 
@@ -51,7 +55,9 @@ int StreamPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, uns
 	{
 		if(it->second->prefetch_line == line)
 		{
-			if(debug) fprintf(stderr, "[HIT] LPL:%d CRL:%d\n", it->second->prefetch_line, line);
+			#ifdef DEBUG 
+				fprintf(stderr, "[HIT] LPL:%d CRL:%d\n", it->second->prefetch_line, line);
+			#endif
 			stat_total_prefetch_hit2++; 
 			stat_heart_beat_prefetch_hit2++;
 		}
@@ -74,7 +80,9 @@ int StreamPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, uns
 	/* If it misses the history cache, allocate one tracker */
 	if(index == -1)
 	{
-		if(debug) fprintf(stderr, "HC Miss\n");
+		#ifdef DEBUG 
+			fprintf(stderr, "HC Miss\n");
+		#endif
 		int maxAge = -1, repIndex = -1;
 		for(int i=0;i<size;++i)
 		{
@@ -98,22 +106,26 @@ int StreamPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, uns
 		trackers[index].age = 0;
 		trackers[index].valid = true;
 		for(int i=0;i<size;++i){if(i!=index) trackers[i].age++;}
-		if(debug) fprintf(stderr, "HC insert, P:%x LL:%d S:%d A:%d v:%d\n", trackers[index].page,
-																			trackers[index].last_line,
-																			trackers[index].stride,
-																			trackers[index].age,
-																			trackers[index].valid);
+		#ifdef DEBUG 
+			fprintf(stderr, "HC insert, P:%x LL:%d S:%d A:%d v:%d\n", 	trackers[index].page,
+																		trackers[index].last_line,
+																		trackers[index].stride,
+																		trackers[index].age,
+																		trackers[index].valid);
+		#endif
 		return -1;
 	}
 	
 	else
 	{
-		if(debug) fprintf(stderr, "HC Hit\n");
-		if(debug) fprintf(stderr, "HC state, P:%x LL:%d S:%d A:%d v:%d\n", 	trackers[index].page,
-																			trackers[index].last_line,
-																			trackers[index].stride,
-																			trackers[index].age,
-																			trackers[index].valid);
+		#ifdef DEBUG 
+			fprintf(stderr, "HC Hit\n");
+			fprintf(stderr, "HC state, P:%x LL:%d S:%d A:%d v:%d\n", 	trackers[index].page,
+																		trackers[index].last_line,
+																		trackers[index].stride,
+																		trackers[index].age,
+																		trackers[index].valid);
+		#endif
 		trackers[index].age = 0;
 		trackers[index].valid = true;
 		for(int i=0;i<size;++i){if(i!=index) trackers[i].age++;}
@@ -122,14 +134,20 @@ int StreamPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, uns
 		int line_stride = line_offset - trackers[index].last_line;
 		if(line_stride == 0)
 		{
-			if(debug) fprintf(stderr, "Line stride zero, returning\n");
+			#ifdef DEBUG 
+				fprintf(stderr, "Line stride zero, returning\n");
+			#endif
 			return -1;
 		}
 			
-		if(debug) fprintf(stderr, "Stride nonzero\n");
+		#ifdef DEBUG 
+			fprintf(stderr, "Stride nonzero\n");
+		#endif
 		if(line_stride == trackers[index].stride && (line_offset+line_stride>=0 && line_offset+line_stride<64))
 		{
-			if(debug) fprintf(stderr, "Stride match:%d\n", line_stride);
+			#ifdef DEBUG 
+				fprintf(stderr, "Stride match:%d\n", line_stride);
+			#endif
 			steady = true;
 			(*prefAddr) = (page << PAGE_SIZE_LOG) + ((line_offset + line_stride) << LINE_SIZE_LOG);
 			last_prefetched_line = (*prefAddr) >> LINE_SIZE_LOG;
@@ -144,11 +162,13 @@ int StreamPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, uns
 		trackers[index].page = page;
 		trackers[index].last_line = line_offset;
 		trackers[index].stride = line_stride;
-		if(debug) fprintf(stderr, "HC update, P:%x LL:%d S:%d A:%d v:%d\n", trackers[index].page,
-																			trackers[index].last_line,
-																			trackers[index].stride,
-																			trackers[index].age,
-																			trackers[index].valid);
+		#ifdef DEBUG 
+			fprintf(stderr, "HC update, P:%x LL:%d S:%d A:%d v:%d\n", 	trackers[index].page,
+																		trackers[index].last_line,
+																		trackers[index].stride,
+																		trackers[index].age,
+																		trackers[index].valid);
+		#endif
 		
 		return (steady?1:-1);
 	}
@@ -174,6 +194,7 @@ void StreamPrefetcher::prefetcher_final_stats()
 
 void StreamPrefetcher::prefetcher_destroy()
 {
-	if(debug)
+	#ifdef DEBUG
 		fprintf(stderr, "Deallocating prefetcher.%s\n", name);
+	#endif
 }

@@ -1,11 +1,18 @@
-CC = g++
-CORE = StreamPrefetcher.o SMSPrefetcher.o
-CCFLAGS = -g -o2
+CXX = g++
+CORE = StreamPrefetcher.o SMSPrefetcher.o TwoLevelPrefetcher.o
+CXXFLAGS = -o2
 
-all: $(CORE)
+all: release debug
+
+.PHONY: debug
+debug: CXXFLAGS += -g -DDEBUG
+debug: $(CORE)
+
+.PHONY: release
+release: $(CORE)
 
 %.o: %.cpp 
-	$(CC) -c $(CCFLAGS) -o $@ $<
+	$(CXX) -c $(CXXFLAGS) -o $@ $<
 
 clean:
 	@echo "Cleaning prefetcher directory..."

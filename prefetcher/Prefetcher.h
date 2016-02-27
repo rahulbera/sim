@@ -10,7 +10,7 @@ class Prefetcher
 {
 	public:
 		//To be called for initializing prefetcher
-		virtual void prefetcher_init(char *name, bool debug, int n)=0;
+		virtual void prefetcher_init(char *name, int n)=0;
 
 		//Returns 1 if it prefetches, and assignes the address to be prefetched in prefAddr
 		//Returns -1 otherwise

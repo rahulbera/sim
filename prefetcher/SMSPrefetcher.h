@@ -27,7 +27,6 @@ typedef struct entry2
 class SMSPrefetcher : public Prefetcher
 {
 	private:
-		bool debug;
 		char name[100];
 		entry_t *acc_table;
 		entry_t *filter_table;
@@ -47,8 +46,8 @@ class SMSPrefetcher : public Prefetcher
 	public:
 		SMSPrefetcher(){}
 		~SMSPrefetcher(){}
-		void prefetcher_init(char *name, bool debug, int n);
-		void prefetcher_init(char*, bool, unsigned int, unsigned int, unsigned int, unsigned int);
+		void prefetcher_init(char *name, int n);
+		void prefetcher_init(char*, unsigned int, unsigned int, unsigned int, unsigned int);
 		int  prefetcher_operate(unsigned int ip, unsigned int addr, unsigned int *prefAddr);
 		int  prefetcher_operate(unsigned int ip, unsigned int addr, unsigned int **prefAddr, int *size);
 		void prefetcher_heartbeat_stats();

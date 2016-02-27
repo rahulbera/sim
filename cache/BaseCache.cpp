@@ -35,6 +35,7 @@ BaseCache::BaseCache(char *s, unsigned int a,unsigned int b,unsigned int c)
     }
     
     totalAccess = hit = miss = 0;
+    stat_heart_beat_total_access = stat_heart_beat_hit = stat_heart_beat_miss = 0;
     totalPrefetchedLines = totalPrefetchedLinesHit = totalPrefetchedUnusedLines = 0;
     for(unsigned int i=0;i<16;++i) reuseCountBucket[i] = 0;
 }
@@ -44,9 +45,10 @@ BaseCache::~BaseCache()
     free(cache);
 }
 
-void BaseCache::heart_beat_stats(int verbose)
+void BaseCache::heart_beat_stats()
 {
-
+    fprintf(stderr, "%s.Total:%d %s.Miss: %d [%0.2f] ", name, stat_heart_beat_total_access, name, stat_heart_beat_miss, (float)stat_heart_beat_miss/stat_heart_beat_total_access*100);
+    stat_heart_beat_total_access = stat_heart_beat_hit = stat_heart_beat_miss = 0;
 }
 
 void BaseCache::final_stats(int verbose)

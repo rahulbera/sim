@@ -27,8 +27,6 @@ typedef struct info
 class StreamPrefetcher : public Prefetcher
 {
 	private:
-		bool debug;
-
 		char name[100];
 		tracker_t *trackers;
 		int size;
@@ -47,7 +45,7 @@ class StreamPrefetcher : public Prefetcher
 	public:
 		StreamPrefetcher(){}
 		~StreamPrefetcher(){}
-		void prefetcher_init(char *name, bool debug, int n);
+		void prefetcher_init(char *name, int n);
 		int  prefetcher_operate(unsigned int ip, unsigned int addr, unsigned int *prefAddr);
 		void prefetcher_heartbeat_stats();
 		void prefetcher_final_stats();

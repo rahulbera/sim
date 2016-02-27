@@ -34,6 +34,8 @@ class BaseCache
         unsigned int    reuseCountBucket[16];
         unsigned int    totalAccess;
         unsigned int    hit,miss;
+        unsigned int    stat_heart_beat_total_access;
+        unsigned int    stat_heart_beat_hit, stat_heart_beat_miss;
         unsigned int    totalPrefetchedLines;
         unsigned int    totalPrefetchedLinesHit;
         unsigned int    totalPrefetchedUnusedLines;
@@ -48,7 +50,7 @@ class BaseCache
         virtual void insertion(unsigned int,unsigned int,unsigned int, bool)=0;
         virtual int update(unsigned int, bool)=0;
         
-        void heart_beat_stats(int);
+        void heart_beat_stats();
         void final_stats(int);
         
     private:

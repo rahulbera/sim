@@ -1,11 +1,18 @@
-CC = g++
+CXX = g++
 CORE = BaseCache.o LRUCache.o
-CCFLAGS = -g -o2
+CXXFLAGS = -o2
 
-all: $(CORE)
+all: release debug
+
+.PHONY: debug
+debug: CXXFLAGS += -g -DDEBUG
+debug: $(CORE)
+
+.PHONY: release
+release: $(CORE)
 
 %.o: %.cpp
-	$(CC) -c $(CCFLAGS) -o $@ $<
+	$(CXX) -c $(CXXFLAGS) -o $@ $<
 
 clean:
 	@echo "Cleaning cache directory..."

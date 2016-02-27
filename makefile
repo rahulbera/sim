@@ -1,18 +1,27 @@
-CC=g++
+CXX=g++
 MAIN = sim.cpp
 PREFETCHER = prefetcher
 CACHE = cache
-CCFLAGS = -g -o2 -Wno-write-strings
+CXXFLAGS = -o2 -Wall
 
-all: sim
+all: release debug
 
-sim: $(MAIN)
-	@cd $(PREFETCHER) && make
-	@cd $(CACHE) && make
-	$(CC) $(CCFLAGS) -o sim $(MAIN) $(PREFETCHER)/StreamPrefetcher.o $(PREFETCHER)/SMSPrefetcher.o $(CACHE)/BaseCache.o $(CACHE)/LRUCache.o -lz	
+.PHONY: debug
+debug: CXXFLAGS += -g -DDEBUG
+debug: $(MAIN)
+	@cd $(PREFETCHER) && make debug
+	@cd $(CACHE) && make debug
+	$(CXX) $(CXXFLAGS) -o sim_debug $(MAIN) $(PREFETCHER)/StreamPrefetcher.o $(PREFETCHER)/SMSPrefetcher.o $(CACHE)/BaseCache.o $(CACHE)/LRUCache.o -lz
 
+.PHONY: release
+release: $(MAIN)
+	@cd $(PREFETCHER) && make release
+	@cd $(CACHE) && make release
+	$(CXX) $(CXXFLAGS) -o sim $(MAIN) $(PREFETCHER)/StreamPrefetcher.o $(PREFETCHER)/SMSPrefetcher.o $(CACHE)/BaseCache.o $(CACHE)/LRUCache.o -lz
+
+.PHONY: clean
 clean:
 	@cd $(PREFETCHER) && make clean
 	@cd $(CACHE) && make clean
-	@rm -f sim
+	@rm -f sim sim_debug
 	@rm -f analysis
