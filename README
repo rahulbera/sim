@@ -22,9 +22,14 @@ Currently sim supports these knobs:
 --trace-dump
 	Dumps memtrace in stderr. Not compatible with other knobs except trace.
 	Disables cache and prefetcher by default. Hides heartbeat.
+--l1trace-dump
+	Dumps l1miss memtrace in stderr. Don't use it with other trace dumps.
+	Enables cache by default. Hides heartbeat.
 --l2trace-dump
-	Dumps l2miss memtrace in stderr. Don't use it with trace-dump.
-	Enables cache and prefetcher by default. Hides heartbeat.
+	Dumps l2miss memtrace in stderr. Don't use it with other trace dumps.
+	Enables cache by default. Hides heartbeat.
+--[l1|l2]verbose <n>
+	Cache verbose level, from 0-3. Default 0.
 --hide-heartbeat
 	Hides heart beat stats.
 --no-prefetch

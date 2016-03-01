@@ -2,7 +2,7 @@ CXX=g++
 MAIN = sim.cpp
 PREFETCHER = prefetcher
 CACHE = cache
-CXXFLAGS = -o2 -Wall
+CXXFLAGS = -std=c++11 -o2 -Wall
 
 all: release debug
 

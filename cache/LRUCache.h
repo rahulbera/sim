@@ -16,8 +16,8 @@ class LRUCache : public BaseCache
         void promotion(unsigned int,unsigned int, bool);
         unsigned int victimize(unsigned int);
         void eviction(unsigned int,unsigned int);
-        void insertion(unsigned int,unsigned int,unsigned int, bool);
-        int update(unsigned int, bool);
+        void insertion(unsigned int,unsigned int,unsigned int,unsigned int, bool);
+        int update(unsigned int, unsigned int, bool);
 
 };
 

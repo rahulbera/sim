@@ -13,6 +13,7 @@
 
 static char trace_file_name[1000];
 static bool trace_dump;
+static bool l1trace_dump;
 static bool l2trace_dump;
 static int heart_beat;
 static bool hide_heart_beat;
@@ -20,6 +21,8 @@ static bool hasBegin;
 static bool hasEnd;
 static bool prefetcher_on;
 static bool cache_on;
+static int  l1_verbose;
+static int  l2_verbose;
 static unsigned int begin, end;
 static unsigned int count; 
 static char help[1000] = 
@@ -35,9 +38,14 @@ static char help[1000] =
 				"--trace-dump\n"
 				"	Dumps memtrace in stderr. Not compatible with other knobs except trace.\n"
 				"	Disables cache and prefetcher by default. Hides heartbeat.\n"
+				"--l1trace-dump\n"
+				"	Dumps l1miss memtrace in stderr. Don't use it with other trace dumps.\n"
+				"	Enables cache by default. Hides heartbeat.\n"
 				"--l2trace-dump\n"
-				"	Dumps l2miss memtrace in stderr. Don't use it with trace-dump.\n"
-				"	Enables cache and prefetcher by default. Hides heartbeat.\n"
+				"	Dumps l2miss memtrace in stderr. Don't use it with other trace dumps.\n"
+				"	Enables cache by default. Hides heartbeat.\n"
+				"--[l1|l2]verbose <n>\n"
+				"	Cache verbose level, from 0-3. Default 0.\n"
 				"--hide-heartbeat\n"
 				"	Hides heart beat stats.\n"
 				"--no-prefetch\n"
@@ -68,14 +76,26 @@ void sim_parse_command_line(int argc, char *argv[])
 		}
 		if(!strcmp(argv[i], "--trace-dump"))
 		{
-			if(l2trace_dump)
+			if(l1trace_dump || l2trace_dump)
 			{
-				fprintf(stderr, "Fatal: Don't use l2trace-dump and trace-dump simultaneously\n");
+				fprintf(stderr, "Fatal: Don't use trace-dump with other trace dumps\n");
 				exit(1);
 			}
 			trace_dump = true;
 			prefetcher_on = false;
 			cache_on = false;
+			hide_heart_beat = true;
+			continue;
+		}
+		if(!strcmp(argv[i], "--l1trace-dump"))
+		{
+			if(trace_dump)
+			{
+				fprintf(stderr, "Fatal: Don't use l1trace-dump with other trace dumps\n");
+				exit(1);
+			}
+			l1trace_dump = true;
+			cache_on = true;
 			hide_heart_beat = true;
 			continue;
 		}
@@ -88,8 +108,17 @@ void sim_parse_command_line(int argc, char *argv[])
 			}
 			l2trace_dump = true;
 			cache_on = true;
-			prefetcher_on = true;
 			hide_heart_beat = true;
+			continue;
+		}
+		if(!strcmp(argv[i], "--l1verbose"))
+		{
+			l1_verbose = atoi(argv[++i]);
+			continue;
+		}
+		if(!strcmp(argv[i], "--l2verbose"))
+		{
+			l2_verbose = atoi(argv[++i]);
 			continue;
 		}
 		if(!strcmp(argv[i], "--hide-heartbeat"))
@@ -134,6 +163,7 @@ void sim_parse_command_line(int argc, char *argv[])
 void sim_init()
 {
 	trace_dump = false;
+	l1trace_dump = false;
 	l2trace_dump = false;
 	hide_heart_beat = false;
 	heart_beat = 10000000;
@@ -141,6 +171,8 @@ void sim_init()
 	hasEnd = false;
 	prefetcher_on = true;
 	cache_on = true;
+	l1_verbose = 0;
+	l2_verbose = 0;
 	count = 0;
 }
 
@@ -171,7 +203,7 @@ int main(int argc, char *argv[])
 	unsigned int pc, addr, prefAddr;
 	unsigned int *prefList; int size;
 	bool isRead;
-	int n, res, foundInL2;
+	int n, res, foundInL1, foundInL2;
 	while(gzread(gfp,(void*)(&pc),sizeof(unsigned int)) != 0)
 	{
 		count++;
@@ -197,9 +229,12 @@ int main(int argc, char *argv[])
 		
 		if(cache_on)
 		{
-			if(l1.update(addr,false) == -1)
+			foundInL1 = l1.update(pc, addr, false);
+			if(foundInL1 == -1 && l1trace_dump)
+					fprintf(stderr, "%*x %*x %*d P:%*x L:%*x LO:%*d\n", 7, pc, 8, addr, 1, isRead, 5, addr>>12, 7, addr>>6, 2, (addr>>6)&63);
+			if(foundInL1 == -1)
 			{
-				foundInL2 = l2.update(addr,false);
+				foundInL2 = l2.update(pc, addr, false);
 				if(foundInL2 == -1 && l2trace_dump)
 					fprintf(stderr, "%*x %*x %*d P:%*x L:%*x LO:%*d\n", 7, pc, 8, addr, 1, isRead, 5, addr>>12, 7, addr>>6, 2, (addr>>6)&63);
 			}
@@ -215,7 +250,7 @@ int main(int argc, char *argv[])
 			if(res != -1 && cache_on)
 			{
 				for(int i=0;i<size;++i)
-					l2.update(prefList[i],true);
+					l2.update(pc, prefList[i], true);
 			}
 		}
 		
@@ -238,8 +273,8 @@ int main(int argc, char *argv[])
 
 	if(cache_on)
 	{
-		l1.final_stats(0);
-		l2.final_stats(0);
+		l1.final_stats(l1_verbose);
+		l2.final_stats(l2_verbose);
 	}
 	if(prefetcher_on)
 		//sp.prefetcher_final_stats();

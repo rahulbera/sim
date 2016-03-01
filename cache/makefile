@@ -1,6 +1,6 @@
 CXX = g++
 CORE = BaseCache.o LRUCache.o
-CXXFLAGS = -o2
+CXXFLAGS = -std=c++11 -o2
 
 all: release debug
 

@@ -37,8 +37,8 @@ void LRUCache::promotion(unsigned int setIndex, unsigned int wayIndex, bool isPr
             cache[setIndex][i].age++;
     }
     cache[setIndex][wayIndex].age = 0;
+    cache[setIndex][wayIndex].state = isPrefetched;
     cache[setIndex][wayIndex].reuseCount++;
-    //cache[setIndex][wayIndex].isPrefetched = isPrefetched;
 }
 
 unsigned int LRUCache::victimize(unsigned int setIndex)
@@ -58,18 +58,40 @@ void LRUCache::eviction(unsigned int setIndex, unsigned int wayIndex)
         reuseCountBucket[cache[setIndex][wayIndex].reuseCount]++;
     if(cache[setIndex][wayIndex].state)
     {
-        if(cache[setIndex][wayIndex].reuseCount == 0)
-            totalPrefetchedUnusedLines++;
-        else
-            totalPrefetchedLinesHit += cache[setIndex][wayIndex].reuseCount;
+        totalPrefetchedUnusedLines++;
+        unsigned int lineAddr = ((cache[setIndex][wayIndex].tag << (setsInPowerOfTwo + offset)) + (setIndex << offset));
+        unused_prefetch_set.insert(lineAddr);
     }
-    
+
     cache[setIndex][wayIndex].reuseCount = 0;
     cache[setIndex][wayIndex].valid = false;
 }
 
-void LRUCache::insertion(unsigned int setIndex, unsigned int wayIndex, unsigned int tag, bool isPrefetched)
+void LRUCache::insertion(unsigned int pc, unsigned int setIndex, unsigned int wayIndex, unsigned int tag, bool isPrefetched)
 {
+    if(!isPrefetched)
+    {
+        std::unordered_map<unsigned int,stat_t*>::iterator mi = demand_miss_map.find(pc);
+        if(mi == demand_miss_map.end())
+        {
+            stat_t *temp = (stat_t*)malloc(sizeof(stat_t));
+            temp->total_demand_miss = 1;
+            temp->total_early_prefetch = 0;
+            demand_miss_map.insert(std::pair<unsigned int,stat_t*>(pc,temp));
+        }
+        else
+            mi->second->total_demand_miss++;
+
+        unsigned int lineAddr = ((tag << (setsInPowerOfTwo + offset)) + (setIndex << offset));
+        std::unordered_set<unsigned int>::iterator it = unused_prefetch_set.find(lineAddr);
+        if(it != unused_prefetch_set.end())
+        {
+            mi = demand_miss_map.find(pc);
+            mi->second->total_early_prefetch++;
+            unused_prefetch_set.erase(it);
+        }
+    }
+
     cache[setIndex][wayIndex].tag = tag;
     cache[setIndex][wayIndex].age = 0;
     cache[setIndex][wayIndex].valid = true;
@@ -82,7 +104,7 @@ void LRUCache::insertion(unsigned int setIndex, unsigned int wayIndex, unsigned 
     }
 }
 
-int LRUCache::update(unsigned int addr, bool isPrefetched)
+int LRUCache::update(unsigned int pc, unsigned int addr, bool isPrefetched)
 {
     unsigned int temp = addr >> offset;
     unsigned int setIndex = temp & (noOfSets-1);
@@ -115,7 +137,7 @@ int LRUCache::update(unsigned int addr, bool isPrefetched)
         unsigned int victimWayIndex = victimize(setIndex);
         if(cache[setIndex][victimWayIndex].valid)
             eviction(setIndex,victimWayIndex);
-        insertion(setIndex,victimWayIndex,tag, isPrefetched);
+        insertion(pc,setIndex,victimWayIndex,tag,isPrefetched);
         return -1;
     }
     
