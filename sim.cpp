@@ -45,7 +45,7 @@ static char help[1000] =
 				"	Dumps l2miss memtrace in stderr. Don't use it with other trace dumps.\n"
 				"	Enables cache by default. Hides heartbeat.\n"
 				"--[l1|l2]verbose <n>\n"
-				"	Cache verbose level, from 0-3. Default 0.\n"
+				"	Cache verbose level, from 0-4. Default 0.\n"
 				"--hide-heartbeat\n"
 				"	Hides heart beat stats.\n"
 				"--no-prefetch\n"
@@ -264,7 +264,7 @@ int main(int argc, char *argv[])
 			if(cache_on)
 			{
 				//l1.heart_beat_stats();
-				l2.heart_beat_stats();
+				l2.heart_beat_stats(0);
 			}
 			fprintf(stderr,"\n");
 		}

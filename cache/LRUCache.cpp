@@ -60,7 +60,7 @@ void LRUCache::eviction(unsigned int setIndex, unsigned int wayIndex)
     {
         totalPrefetchedUnusedLines++;
         unsigned int lineAddr = ((cache[setIndex][wayIndex].tag << (setsInPowerOfTwo + offset)) + (setIndex << offset));
-        unused_prefetch_set.insert(lineAddr);
+        early_prefetch.insert(std::pair<unsigned int, unsigned int>(lineAddr, cache[setIndex][wayIndex].pc));
     }
 
     cache[setIndex][wayIndex].reuseCount = 0;
@@ -71,32 +71,21 @@ void LRUCache::insertion(unsigned int pc, unsigned int setIndex, unsigned int wa
 {
     if(!isPrefetched)
     {
-        std::unordered_map<unsigned int,stat_t*>::iterator mi = demand_miss_map.find(pc);
-        if(mi == demand_miss_map.end())
-        {
-            stat_t *temp = (stat_t*)malloc(sizeof(stat_t));
-            temp->total_demand_miss = 1;
-            temp->total_early_prefetch = 0;
-            demand_miss_map.insert(std::pair<unsigned int,stat_t*>(pc,temp));
-        }
-        else
-            mi->second->total_demand_miss++;
-
         unsigned int lineAddr = ((tag << (setsInPowerOfTwo + offset)) + (setIndex << offset));
-        std::unordered_set<unsigned int>::iterator it = unused_prefetch_set.find(lineAddr);
-        if(it != unused_prefetch_set.end())
-        {
-            mi = demand_miss_map.find(pc);
-            mi->second->total_early_prefetch++;
-            unused_prefetch_set.erase(it);
-        }
+        update_early_prefetch_map(pc, lineAddr);
+    }
+
+    if(isPrefetched)
+    {
+        totalPrefetchedLines++;
+        update_pc_prefetch_map(pc);
     }
 
     cache[setIndex][wayIndex].tag = tag;
+    cache[setIndex][wayIndex].pc = pc;
     cache[setIndex][wayIndex].age = 0;
     cache[setIndex][wayIndex].valid = true;
     cache[setIndex][wayIndex].state = isPrefetched;
-    if(isPrefetched) totalPrefetchedLines++;
     for(unsigned int i=0;i<associativity;++i)
     {
         if(i!=wayIndex && cache[setIndex][i].valid)
@@ -142,5 +131,71 @@ int LRUCache::update(unsigned int pc, unsigned int addr, bool isPrefetched)
     }
     
 }
+
+void LRUCache::update_early_prefetch_map(unsigned int pc, unsigned int lineAddr)
+{
+    std::unordered_map<unsigned int,stat_t*>::iterator mi = demand_miss_map.find(pc);
+    if(mi == demand_miss_map.end())
+    {
+        stat_t *temp = (stat_t*)malloc(sizeof(stat_t));
+        temp->counter1 = 1;
+        temp->counter2 = 0;
+        demand_miss_map.insert(std::pair<unsigned int,stat_t*>(pc,temp));
+    }
+    else
+        mi->second->counter1++;
+
+    
+    std::unordered_map<unsigned int, unsigned int>::iterator it = early_prefetch.find(lineAddr);
+    if(it != early_prefetch.end())
+    {
+        mi = demand_miss_map.find(pc);
+        mi->second->counter2++;
+        std::unordered_map<unsigned int, stat_t*>::iterator it2 = pc_prefetch_map.find(it->second);
+        if(it2 != pc_prefetch_map.end())
+            it2->second->counter2++;
+        early_prefetch.erase(it);
+    }
+}
+
+void LRUCache::update_pc_prefetch_map(unsigned int pc)
+{
+    std::unordered_map<unsigned int, stat_t*>::iterator it = pc_prefetch_map.find(pc);
+    if(it != pc_prefetch_map.end())
+        it->second->counter1++;
+    else
+    {
+        stat_t *temp = (stat_t*)malloc(sizeof(stat_t));
+        temp->counter1 = 1;
+        temp->counter2 =0;
+        pc_prefetch_map.insert(std::pair<unsigned int, stat_t*>(pc,temp));
+    }
+}
+
+void LRUCache::heart_beat_stats(int verbose)
+{
+    BaseCache::heart_beat_stats(verbose);
+}
+
+void LRUCache::final_stats(int verbose)
+{
+    BaseCache::final_stats(verbose);
+    if(verbose > 0)
+    {
+        fprintf(stdout, "[ Cache.%s.DEMAND_MISS_MAP]\n", name);
+        std::unordered_map<unsigned int,stat_t*>::iterator it;
+        for(it=demand_miss_map.begin();it!=demand_miss_map.end();++it)
+            fprintf(stdout, "%*x %*d %*d\n", 7, it->first, 7, it->second->counter1, 7, it->second->counter2);
+    }
+    if(verbose > 1)
+    {
+        fprintf(stdout, "[ Cache.%s.PC_PREFETCH_MAP]\n", name);
+        std::unordered_map<unsigned int, stat_t*>::iterator it;
+        for(it=pc_prefetch_map.begin();it!=pc_prefetch_map.end();++it)
+            fprintf(stdout, "%*x %*d %*d\n", 7, it->first, 7, it->second->counter1, 7, it->second->counter2);
+    }
+}
+
+
 
 

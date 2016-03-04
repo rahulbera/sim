@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <unordered_set>
 #include <unordered_map>
 #define MAX 100
 
@@ -17,6 +16,8 @@ class CacheLine
         unsigned int    reuseCount;
         bool            state; /* 0 signifies it is installed as demand, 1 as prefetched */
         bool            valid;
+        /* Naya wala funda */
+        unsigned int    pc;
 
     public:
 	CacheLine(unsigned int);
@@ -24,8 +25,7 @@ class CacheLine
 
 typedef struct stat
 {
-    unsigned int total_demand_miss;
-    unsigned int total_early_prefetch;
+    unsigned int counter1, counter2;
 }stat_t;
 
 class BaseCache
@@ -47,12 +47,11 @@ class BaseCache
         /* Prefetcher related counters */
         unsigned int    totalPrefetchedLines;
         unsigned int    totalPrefetchedUnusedLines;
-        std::unordered_set<unsigned int> unused_prefetch_set;
-        std::unordered_map<unsigned int,stat_t*> demand_miss_map;
     
     public:
         BaseCache(char*,unsigned int,unsigned int,unsigned int);
         ~BaseCache();
+        
         virtual int find(unsigned int,unsigned int)=0;
         virtual void promotion(unsigned int,unsigned int, bool)=0;
         virtual unsigned int victimize(unsigned int)=0;
@@ -60,8 +59,8 @@ class BaseCache
         virtual void insertion(unsigned int,unsigned int,unsigned int,unsigned int, bool)=0;
         virtual int update(unsigned int, unsigned int, bool)=0;
         
-        void heart_beat_stats();
-        void final_stats(int);
+        virtual void heart_beat_stats(int);
+        virtual void final_stats(int);
         
     private:
         unsigned int log2(unsigned int);

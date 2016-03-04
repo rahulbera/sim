@@ -7,6 +7,7 @@ CacheLine::CacheLine(unsigned int b)
 {
     size = b;
     tag=0;
+    pc = 0;
     age=0;
     reuseCount = 0;
     valid=false;
@@ -45,7 +46,7 @@ BaseCache::~BaseCache()
     free(cache);
 }
 
-void BaseCache::heart_beat_stats()
+void BaseCache::heart_beat_stats(int verbose)
 {
     fprintf(stderr, "%s.Total:%d %s.Miss: %d [%0.2f] ", name, stat_heart_beat_total_access, name, stat_heart_beat_miss, (float)stat_heart_beat_miss/stat_heart_beat_total_access*100);
     stat_heart_beat_total_access = stat_heart_beat_hit = stat_heart_beat_miss = 0;
@@ -59,13 +60,7 @@ void BaseCache::final_stats(int verbose)
     fprintf(stdout, "Misses =  %d [%0.2f]\n", miss, (float)miss/totalAccess*100);
     fprintf(stdout, "Prefetched = %d\n", totalPrefetchedLines);
     fprintf(stdout, "PrefetchedUnused = %d\n", totalPrefetchedUnusedLines);
-    if(verbose > 0)
-    {
-        std::unordered_map<unsigned int,stat_t*>::iterator it;
-        for(it=demand_miss_map.begin();it!=demand_miss_map.end();++it)
-            fprintf(stdout, "%*x %*d %*d\n", 7, it->first, 6, it->second->total_demand_miss, 6, it->second->total_early_prefetch);
-    }
-    if(verbose > 1)
+    if(verbose > 2)
     {
         fprintf(stdout, "Reuse count stats:\n");
         unsigned int total = 0;
@@ -73,7 +68,7 @@ void BaseCache::final_stats(int verbose)
         for(int i=0;i<16;++i)
             fprintf(stdout, "%d: %0.2f\n", i, (float)reuseCountBucket[i]/total*100);
     }
-    if(verbose > 2)
+    if(verbose > 3)
     {
         for(int i=0;i<noOfSets;++i)
         {
