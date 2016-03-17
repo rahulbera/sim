@@ -1,5 +1,5 @@
 CXX = g++
-CORE = StreamPrefetcher.o SMSPrefetcher.o TwoLevelPrefetcher.o
+CORE = wssc.o SMSPrefetcher.o
 CXXFLAGS = -o2
 
 all: release debug

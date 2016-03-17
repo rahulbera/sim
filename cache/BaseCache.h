@@ -4,34 +4,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <assert.h>
 #include <unordered_map>
-#define MAX 100
+#include "util.h"
+#define ASSERT(cond,msg) do{if(!(cond)){fprintf(stderr,msg);exit(1);}}while(0)
 
 class CacheLine
 {
     public:
-        unsigned int    size;
         unsigned int    tag;
-        unsigned int    age;
         unsigned int    reuseCount;
-        bool            state; /* 0 signifies it is installed as demand, 1 as prefetched */
-        bool            valid;
-        /* Naya wala funda */
         unsigned int    pc;
+        unsigned int    signature;
+        int             age;
+        bool            valid;
+        bool            pref;
+        bool            pref_hit;
+        bool            pref_pred;
 
     public:
-	CacheLine(unsigned int);
+	CacheLine();
 };
-
-typedef struct stat
-{
-    unsigned int counter1, counter2;
-}stat_t;
 
 class BaseCache
 {
     public:
-        char            name[MAX];
+        char            name[100];
         unsigned int    associativity;
         unsigned int    noOfSets;
         unsigned int    setsInPowerOfTwo;
@@ -43,10 +41,6 @@ class BaseCache
         unsigned int    hit,miss;
         unsigned int    stat_heart_beat_total_access;
         unsigned int    stat_heart_beat_hit, stat_heart_beat_miss;
-
-        /* Prefetcher related counters */
-        unsigned int    totalPrefetchedLines;
-        unsigned int    totalPrefetchedUnusedLines;
     
     public:
         BaseCache(char*,unsigned int,unsigned int,unsigned int);
@@ -61,9 +55,6 @@ class BaseCache
         
         virtual void heart_beat_stats(int);
         virtual void final_stats(int);
-        
-    private:
-        unsigned int log2(unsigned int);
 };
 
 #endif	/* BASECACHE_H */

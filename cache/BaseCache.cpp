@@ -3,20 +3,14 @@
 #include <string.h>
 #include "BaseCache.h"
 
-CacheLine::CacheLine(unsigned int b)
+CacheLine::CacheLine()
 {
-    size = b;
-    tag=0;
+    tag = 0;
     pc = 0;
-    age=0;
+    age = 0;
     reuseCount = 0;
-    valid=false;
-}
-
-unsigned int BaseCache::log2(unsigned int n)
-{
-    if(n==1) return 0;
-    else return (1+log2(n/2));
+    pref = pref_hit = pref_pred = false;
+    valid = false;
 }
 
 BaseCache::BaseCache(char *s, unsigned int a,unsigned int b,unsigned int c)
@@ -32,12 +26,11 @@ BaseCache::BaseCache(char *s, unsigned int a,unsigned int b,unsigned int c)
     for(unsigned int i=0;i<noOfSets;++i)
     {
         for(unsigned int j=0;j<associativity;++j)
-            cache[i][j] = CacheLine(b);
+            cache[i][j] = CacheLine();
     }
     
     totalAccess = hit = miss = 0;
     stat_heart_beat_total_access = stat_heart_beat_hit = stat_heart_beat_miss = 0;
-    totalPrefetchedLines = totalPrefetchedUnusedLines = 0;
     for(unsigned int i=0;i<16;++i) reuseCountBucket[i] = 0;
 }
 
@@ -58,8 +51,6 @@ void BaseCache::final_stats(int verbose)
     fprintf(stdout, "TotalAccesses =  %d\n", totalAccess);
     fprintf(stdout, "Hits =  %d\n", hit);
     fprintf(stdout, "Misses =  %d [%0.2f]\n", miss, (float)miss/totalAccess*100);
-    fprintf(stdout, "Prefetched = %d\n", totalPrefetchedLines);
-    fprintf(stdout, "PrefetchedUnused = %d\n", totalPrefetchedUnusedLines);
     if(verbose > 2)
     {
         fprintf(stdout, "Reuse count stats:\n");

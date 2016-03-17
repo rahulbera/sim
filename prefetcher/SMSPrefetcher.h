@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "Prefetcher.h"
+#include "wssc.h"
 
 typedef struct entry1
 {
@@ -18,16 +19,19 @@ typedef struct entry2
 {
 	unsigned long int tag;
 	bool *pattern;
+	unsigned int tc, uc;
 	int age;
 	bool valid;
 }pht_t;
 
-
+class wssc;
 
 class SMSPrefetcher : public Prefetcher
 {
 	private:
 		char name[100];
+		wssc *wssc_map;
+
 		entry_t *acc_table;
 		entry_t *filter_table;
 		pht_t **pht_table;
@@ -40,6 +44,8 @@ class SMSPrefetcher : public Prefetcher
 
 		/* Stats*/
 		unsigned int stat_total_prefetch;
+		unsigned int stat_total_pht_hit;
+		unsigned int stat_total_threshold_check_failure;
 		unsigned int stat_total_acc_to_pht;
 		unsigned int stat_total_pht_table_rep;
 
@@ -53,6 +59,11 @@ class SMSPrefetcher : public Prefetcher
 		void prefetcher_heartbeat_stats();
 		void prefetcher_final_stats();
 		void prefetcher_destroy();
+
+		void link_wssc(wssc*);
+		void incr_tc(unsigned long int, unsigned int);
+		void incr_uc(unsigned long int);
+		void update_tc_uc();
 
 		void debug_acc_entry(int);
 		void debug_fil_entry(int);

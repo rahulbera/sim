@@ -8,10 +8,18 @@
 #define OFFSET_LOG (REGION_SIZE_LOG - LINE_SIZE_LOG)
 #define MAX_OFFSET (1<<(OFFSET_LOG))
 
+#define GOLDEN_THRESHOLD 0.25
+#define WSSC_HELP 1
+
 unsigned int SMSPrefetcher::log2(unsigned int n)
 {
 	if(n==1) return 0;
     else return (1+log2(n/2));
+}
+
+void SMSPrefetcher::link_wssc(wssc *w)
+{
+	wssc_map = w;
 }
 
 void SMSPrefetcher::prefetcher_init(char *name, int n)
@@ -22,6 +30,7 @@ void SMSPrefetcher::prefetcher_init(char *name, int n)
 void SMSPrefetcher::prefetcher_init(char *s, unsigned int acc_size, unsigned int fil_size, unsigned int pht_size, unsigned int pht_assoc)
 {
 	strcpy(name,s);
+	wssc_map = NULL;
 	acc_table_size = acc_size;
 	filter_table_size = fil_size;
 	pht_table_size = pht_size;
@@ -68,6 +77,7 @@ void SMSPrefetcher::prefetcher_init(char *s, unsigned int acc_size, unsigned int
 		{
 			pht_table[i][j].pattern = (bool*)malloc(MAX_OFFSET*sizeof(bool));
 			ASSERT(pht_table[i][j].pattern!=NULL, "PHT table pattern allocation falied\n");
+			pht_table[i][j].tc = pht_table[i][j].uc = 0;
 			pht_table[i][j].age = 0;
 			pht_table[i][j].valid = false;
 		}
@@ -75,6 +85,8 @@ void SMSPrefetcher::prefetcher_init(char *s, unsigned int acc_size, unsigned int
 	
 
 	stat_total_prefetch = 0;
+	stat_total_pht_hit = 0;
+	stat_total_threshold_check_failure = 0;
 	stat_total_acc_to_pht = 0;
 	stat_total_pht_table_rep = 0;
 }
@@ -93,6 +105,10 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	#ifdef DEBUG 
 		fprintf(stderr, "R:%x O:%d\n", region, offset);
 	#endif
+
+	/* First check wssc for this demand access */
+	if(wssc_map) wssc_map->update(region, offset);
+
 	/* Search for the entry in accumulation table */
 	index = -1;
 	for(int i=0;i<acc_table_size;++i)
@@ -201,7 +217,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 		stat_total_acc_to_pht++;
 		int repIndex2 = -1;
 		int maxAge2 = -1;
-		unsigned long int temp = (acc_table[repIndex].pc << OFFSET_LOG) + acc_table[repIndex].offset;
+		unsigned long int temp = (((unsigned long int)acc_table[repIndex].pc) << OFFSET_LOG) + (unsigned long int)acc_table[repIndex].offset;
 		unsigned int setIndex = temp & (pht_table_sets - 1);
 		unsigned int tag = temp >> pht_table_sets_log;
 
@@ -248,12 +264,14 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 			}
 			ASSERT(repIndex2!=-1, "Invalid victim selection in PHT table\n");
 			#ifdef DEBUG 
-				fprintf(stderr, "Rep index in PHT:%d\n", repIndex2); 
+				fprintf(stderr, "Rep index in PHT:[%d,%d]\n", setIndex, repIndex2); 
+				fprintf(stderr, "More debug: temp:%lx, setIndex:%d, tag:%x\n", temp, setIndex, tag);
 				debug_pht_entry(setIndex,repIndex2);
 			#endif
 			if(pht_table[setIndex][repIndex2].valid) stat_total_pht_table_rep++;
 			pht_table[setIndex][repIndex2].tag = tag;
 			for(int i=0;i<MAX_OFFSET;++i) pht_table[setIndex][repIndex2].pattern[i] = acc_table[repIndex].pattern[i];
+			pht_table[setIndex][repIndex2].tc = pht_table[setIndex][repIndex2].uc = 0;
 			pht_table[setIndex][repIndex2].valid = true;
 			for(int i=0;i<pht_table_assoc;++i) pht_table[setIndex][i].age++;
 			pht_table[setIndex][repIndex2].age = 0;
@@ -325,7 +343,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	#ifdef DEBUG 
 		fprintf(stderr, "Trigger access, checking PHT\n");
 	#endif
-	unsigned long int temp = (pc << OFFSET_LOG) + offset;
+	unsigned long int temp = (((unsigned long int) pc) << OFFSET_LOG) + (unsigned long int)offset;
 	unsigned int setIndex = temp & (pht_table_sets - 1);
 	unsigned int tag = temp >> pht_table_sets_log;
 	index = -1;
@@ -344,15 +362,40 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 		#endif
 		return -1;
 	}
+
+	/* Access found in PHT, possible prefetch */
 	#ifdef DEBUG 
-		fprintf(stderr, "Access found in PHT:%d\n", index); 
+		fprintf(stderr, "Access found in PHT:[%d,%d]\n", setIndex, index); 
 		debug_pht_entry(setIndex,index);
 	#endif
+	stat_total_pht_hit++;
+
+	/* Check UC/TC ratio. If it's
+	 * less than r, don't prefetch
+	 */
+	if(WSSC_HELP && pht_table[setIndex][index].tc!=0)
+	{
+		float ratio = (float)pht_table[setIndex][index].uc / pht_table[setIndex][index].tc;
+		if(ratio < GOLDEN_THRESHOLD)
+		{
+			stat_total_threshold_check_failure++;
+			#ifdef DEBUG
+				fprintf(stderr, "Threshold check failed!TC:%d,UC%d\n", pht_table[setIndex][index].tc, pht_table[setIndex][index].uc);
+			#endif
+			return -1;
+		}
+	}
+	
 	int n = 0;
 	for(int i=0;i<MAX_OFFSET;++i) {if(pht_table[setIndex][index].pattern[i]) n++;}
 	#ifdef DEBUG 
 		fprintf(stderr, "Prefetch %d\n", n);
+		fprintf(stderr, "Sending info to WSSC\n");
 	#endif
+	
+	/* Calling insert of WSSC */
+	if(wssc_map) wssc_map->insert(region, temp, pht_table[setIndex][index].pattern, n);
+
 	unsigned int *prefList = (unsigned int*)malloc(n*sizeof(unsigned int));
 	ASSERT(prefList!=NULL, "Pref list allocation failed!\n");
 	int k = 0;
@@ -377,6 +420,76 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	return 1;
 }
 
+void SMSPrefetcher::incr_tc(unsigned long int pht_tag, unsigned int n)
+{
+	unsigned int setIndex = pht_tag & (pht_table_sets - 1);
+	unsigned int tag = pht_tag >> pht_table_sets_log;
+	int wayIndex = -1;
+	#ifdef DEBUG
+		fprintf(stderr, "WSSC called incr_tc,PT:%lx,S:%d,T:%x\n", pht_tag, setIndex, tag);
+	#endif
+	for(int i=0;i<pht_table_assoc;++i)
+	{
+		if(pht_table[setIndex][i].valid && pht_table[setIndex][i].tag == tag)
+		{
+			wayIndex = i;
+			break;
+		}
+	}
+	if(wayIndex!=-1)
+	{
+		#ifdef DEBUG
+			fprintf(stderr, "Icrementing TC of [%d,%d]\n", setIndex, wayIndex);
+			debug_pht_entry(setIndex, wayIndex);
+		#endif
+		pht_table[setIndex][wayIndex].tc += n;
+		#ifdef DEBUG
+			debug_pht_entry(setIndex, wayIndex);
+		#endif
+	}
+}
+
+void SMSPrefetcher::incr_uc(unsigned long int pht_tag)
+{
+	unsigned int setIndex = pht_tag & (pht_table_sets - 1);
+	unsigned int tag = pht_tag >> pht_table_sets_log;
+	int wayIndex = -1;
+	#ifdef DEBUG
+		fprintf(stderr, "WSSC called incr_uc,PT:%lx,S:%d,T:%x\n", pht_tag, setIndex, tag);
+	#endif
+	for(int i=0;i<pht_table_assoc;++i)
+	{
+		if(pht_table[setIndex][i].valid && pht_table[setIndex][i].tag == tag)
+		{
+			wayIndex = i;
+			break;
+		}
+	}
+	if(wayIndex!=-1)
+	{
+		#ifdef DEBUG
+			fprintf(stderr, "Icrementing UC of [%d,%d]\n", setIndex, wayIndex);
+			debug_pht_entry(setIndex, wayIndex);
+		#endif
+		pht_table[setIndex][wayIndex].uc++;
+		#ifdef DEBUG
+			debug_pht_entry(setIndex, wayIndex);
+		#endif
+	}
+}
+
+void SMSPrefetcher::update_tc_uc()
+{
+	for(int i=0;i<pht_table_sets;++i)
+	{
+		for(int j=0;j<pht_table_assoc;++j)
+		{
+			pht_table[i][j].tc /= 2;
+			pht_table[i][j].uc /= 2;
+		}
+	}
+}
+
 void SMSPrefetcher::prefetcher_heartbeat_stats()
 {
 
@@ -392,6 +505,8 @@ void SMSPrefetcher::prefetcher_final_stats()
 	fprintf(stdout, "PHTSize = %d\n", pht_table_size);
 	fprintf(stdout, "PHTAssoc = %d\n", pht_table_assoc);
 	fprintf(stdout, "TotalPrefetch = %d\n", stat_total_prefetch);
+	fprintf(stdout, "TotalPHTHit = %d\n", stat_total_pht_hit);
+	fprintf(stdout, "ThresholdCheckFailed = %d\n", stat_total_threshold_check_failure);
 	fprintf(stdout, "TotalAccToPHT = %d\n", stat_total_acc_to_pht);
 	fprintf(stdout, "TotalPHTRepl = %d\n", stat_total_pht_table_rep);
 }
@@ -422,9 +537,7 @@ void SMSPrefetcher::debug_fil_entry(int index)
 void SMSPrefetcher::debug_pht_entry(int setIndex, int wayIndex)
 {
 	fprintf(stderr, "PHT:<");
-	fprintf(stderr, "%*lx|%*x|%*d|", 	10, pht_table[setIndex][wayIndex].tag, 
-										8, (uint)(pht_table[setIndex][wayIndex].tag >> OFFSET_LOG), 
-										2, (uint)(pht_table[setIndex][wayIndex].tag & (MAX_OFFSET-1)));
+	fprintf(stderr, "%*lx|", 7, pht_table[setIndex][wayIndex].tag);
 	for(int i=0;i<MAX_OFFSET;++i) fprintf(stderr, "%d", pht_table[setIndex][wayIndex].pattern[i]);
-	fprintf(stderr, "|>\n");
+	fprintf(stderr, "|%d|%d>\n", pht_table[setIndex][wayIndex].tc, pht_table[setIndex][wayIndex].uc);
 }

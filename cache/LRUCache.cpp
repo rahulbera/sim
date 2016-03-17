@@ -1,20 +1,34 @@
+#include <assert.h>
 #include "LRUCache.h"
 
-LRUCache::LRUCache(char *s, unsigned int a, unsigned int b, unsigned int c):BaseCache(s,a,b,c)
+LRUCache::LRUCache(char *s, unsigned int a, unsigned int b, unsigned int c, unsigned int n, unsigned int m, bool isLite):BaseCache(s,a,b,c)
 {
-    
+    sht_size = n;
+    sig_size = log2(n);
+    sht = (Counter*)malloc(sht_size * sizeof(Counter));
+    assert(sht!=NULL);
+    for(int i=0;i<sht_size;++i)
+        sht[i] = Counter(m);
+
+    lite = isLite;
+    wssc_map = NULL;
+    wssc_interval = 0;
+    stat_total_early_prefetch = 0;
+    totalPrefetchedLines = totalPrefetchedUnusedLines = 0;
+    perfect_prefetch = 0;
+    miss_prediction = 0;
 }
 
 LRUCache::~LRUCache()
 {
-    
+    free(sht);
 }
 
 int LRUCache::find(unsigned int setIndex, unsigned int tag)
 {
     for(unsigned int i=0;i<associativity;++i)
     {
-        if(cache[setIndex][i].tag==tag && cache[setIndex][i].valid)
+        if(cache[setIndex][i].valid && cache[setIndex][i].tag==tag)
             return i;
     }
     return -1;
@@ -33,21 +47,40 @@ void LRUCache::promotion(unsigned int setIndex, unsigned int wayIndex, bool isPr
 {
     for(unsigned int i=0;i<associativity;++i)
     {
-        if(i!=wayIndex && cache[setIndex][i].valid && cache[setIndex][i].age<cache[setIndex][wayIndex].age)
+        if(cache[setIndex][i].valid && cache[setIndex][i].age < cache[setIndex][wayIndex].age)
             cache[setIndex][i].age++;
     }
     cache[setIndex][wayIndex].age = 0;
-    cache[setIndex][wayIndex].state = isPrefetched;
+    
+    if(cache[setIndex][wayIndex].pref && !cache[setIndex][wayIndex].pref_hit)
+    {
+        perfect_prefetch++;
+        cache[setIndex][wayIndex].pref_hit = true;
+        if(!lite) 
+            update_pc_prefetch_map(cache[setIndex][wayIndex].pc);
+    }
+
     cache[setIndex][wayIndex].reuseCount++;
 }
 
 unsigned int LRUCache::victimize(unsigned int setIndex)
 {
+    int index = -1, maxAge = -1;
     for(unsigned int i=0;i<associativity;++i)
     {
-        if(cache[setIndex][i].age == (associativity-1) || !cache[setIndex][i].valid)
-            return i;
+        if(!cache[setIndex][i].valid)
+        {
+            index = i;
+            break;
+        }
+	    else if(cache[setIndex][i].age > maxAge)
+        {
+            maxAge = cache[setIndex][i].age;
+            index = i;
+        }
     }
+    ASSERT(index!=-1, "Invalid victim selection\n");
+    return index;
 }
 
 void LRUCache::eviction(unsigned int setIndex, unsigned int wayIndex)
@@ -56,41 +89,45 @@ void LRUCache::eviction(unsigned int setIndex, unsigned int wayIndex)
         reuseCountBucket[15]++;
     else
         reuseCountBucket[cache[setIndex][wayIndex].reuseCount]++;
-    if(cache[setIndex][wayIndex].state)
+    
+    if(cache[setIndex][wayIndex].pref && !cache[setIndex][wayIndex].pref_hit)
     {
         totalPrefetchedUnusedLines++;
-        unsigned int lineAddr = ((cache[setIndex][wayIndex].tag << (setsInPowerOfTwo + offset)) + (setIndex << offset));
-        early_prefetch.insert(std::pair<unsigned int, unsigned int>(lineAddr, cache[setIndex][wayIndex].pc));
+        if(!lite)
+            insert_early_prefetch_map(setIndex, wayIndex);
     }
-
-    cache[setIndex][wayIndex].reuseCount = 0;
+    
     cache[setIndex][wayIndex].valid = false;
 }
 
 void LRUCache::insertion(unsigned int pc, unsigned int setIndex, unsigned int wayIndex, unsigned int tag, bool isPrefetched)
 {
-    if(!isPrefetched)
-    {
-        unsigned int lineAddr = ((tag << (setsInPowerOfTwo + offset)) + (setIndex << offset));
+    unsigned int lineAddr = ((tag << (setsInPowerOfTwo + offset)) + (setIndex << offset));
+    
+    if(!isPrefetched && !lite)
         update_early_prefetch_map(pc, lineAddr);
-    }
 
     if(isPrefetched)
     {
         totalPrefetchedLines++;
-        update_pc_prefetch_map(pc);
+        if(!lite)
+            insert_pc_prefetch_map(pc);
     }
 
     cache[setIndex][wayIndex].tag = tag;
     cache[setIndex][wayIndex].pc = pc;
-    cache[setIndex][wayIndex].age = 0;
     cache[setIndex][wayIndex].valid = true;
-    cache[setIndex][wayIndex].state = isPrefetched;
+    cache[setIndex][wayIndex].reuseCount = 0;
+    cache[setIndex][wayIndex].pref = isPrefetched;
+    cache[setIndex][wayIndex].pref_hit = false;
+
     for(unsigned int i=0;i<associativity;++i)
     {
-        if(i!=wayIndex && cache[setIndex][i].valid)
-            cache[setIndex][i].age++;
+        if(cache[setIndex][i].valid)
+            cache[setIndex][i].age++;   
     }
+    cache[setIndex][wayIndex].age = 0;
+    
 }
 
 int LRUCache::update(unsigned int pc, unsigned int addr, bool isPrefetched)
@@ -101,9 +138,10 @@ int LRUCache::update(unsigned int pc, unsigned int addr, bool isPrefetched)
 
     if(!isPrefetched) 
     {
-
         totalAccess++;
         stat_heart_beat_total_access++;
+        if(wssc_map && (totalAccess % wssc_interval) == 0)
+            wssc_map->invalidate();
     }
     int wayIndex = find(setIndex,tag);
     if(wayIndex != -1)
@@ -112,7 +150,7 @@ int LRUCache::update(unsigned int pc, unsigned int addr, bool isPrefetched)
         {
             hit++;
             stat_heart_beat_hit++;
-            promotion(setIndex,wayIndex, isPrefetched);
+            promotion(setIndex, wayIndex, isPrefetched);
         }
         return 1;
     }        
@@ -132,6 +170,20 @@ int LRUCache::update(unsigned int pc, unsigned int addr, bool isPrefetched)
     
 }
 
+
+
+void LRUCache::link_wssc(wssc *w)
+{
+    wssc_map = w;
+    wssc_interval = w->get_interval();
+}
+
+void LRUCache::insert_early_prefetch_map(unsigned int setIndex, unsigned int wayIndex)
+{
+    unsigned int lineAddr = ((cache[setIndex][wayIndex].tag << (setsInPowerOfTwo + offset)) + (setIndex << offset));
+    early_prefetch.insert(std::pair<unsigned int, unsigned int>(lineAddr, cache[setIndex][wayIndex].pc));
+}
+
 void LRUCache::update_early_prefetch_map(unsigned int pc, unsigned int lineAddr)
 {
     std::unordered_map<unsigned int,stat_t*>::iterator mi = demand_miss_map.find(pc);
@@ -140,6 +192,7 @@ void LRUCache::update_early_prefetch_map(unsigned int pc, unsigned int lineAddr)
         stat_t *temp = (stat_t*)malloc(sizeof(stat_t));
         temp->counter1 = 1;
         temp->counter2 = 0;
+        temp->counter3 = 0;
         demand_miss_map.insert(std::pair<unsigned int,stat_t*>(pc,temp));
     }
     else
@@ -149,16 +202,18 @@ void LRUCache::update_early_prefetch_map(unsigned int pc, unsigned int lineAddr)
     std::unordered_map<unsigned int, unsigned int>::iterator it = early_prefetch.find(lineAddr);
     if(it != early_prefetch.end())
     {
+        stat_total_early_prefetch++;
         mi = demand_miss_map.find(pc);
         mi->second->counter2++;
-        std::unordered_map<unsigned int, stat_t*>::iterator it2 = pc_prefetch_map.find(it->second);
+        unsigned int  generating_pc = it->second;
+        std::unordered_map<unsigned int, stat_t*>::iterator it2 = pc_prefetch_map.find(generating_pc);
         if(it2 != pc_prefetch_map.end())
             it2->second->counter2++;
         early_prefetch.erase(it);
     }
 }
 
-void LRUCache::update_pc_prefetch_map(unsigned int pc)
+void LRUCache::insert_pc_prefetch_map(unsigned int pc)
 {
     std::unordered_map<unsigned int, stat_t*>::iterator it = pc_prefetch_map.find(pc);
     if(it != pc_prefetch_map.end())
@@ -167,8 +222,28 @@ void LRUCache::update_pc_prefetch_map(unsigned int pc)
     {
         stat_t *temp = (stat_t*)malloc(sizeof(stat_t));
         temp->counter1 = 1;
-        temp->counter2 =0;
+        temp->counter2 = 0;
+        temp->counter3 = 0;
         pc_prefetch_map.insert(std::pair<unsigned int, stat_t*>(pc,temp));
+    }
+}
+
+void LRUCache::update_pc_prefetch_map(unsigned int pc)
+{
+    std::unordered_map<unsigned int, stat_t*>::iterator it = pc_prefetch_map.find(pc);
+    if(it != pc_prefetch_map.end())
+        it->second->counter3++;
+}
+
+void LRUCache::wrap_up()
+{
+    for(int i=0;i<noOfSets;++i)
+    {
+        for(int j=0;j<associativity;++j)
+        {
+            if(cache[i][j].pref && !cache[i][j].pref_hit)
+                totalPrefetchedUnusedLines++;
+        }
     }
 }
 
@@ -180,6 +255,11 @@ void LRUCache::heart_beat_stats(int verbose)
 void LRUCache::final_stats(int verbose)
 {
     BaseCache::final_stats(verbose);
+    fprintf(stdout, "Prefetched = %d\n", totalPrefetchedLines);
+    fprintf(stdout, "PrefetchedUnused = %d [%0.2f]\n", totalPrefetchedUnusedLines, (float)totalPrefetchedUnusedLines/totalPrefetchedLines*100);
+    fprintf(stdout, "PerfectPrefetch = %d [%0.2f]\n", perfect_prefetch, (float)perfect_prefetch/totalPrefetchedLines*100);
+    if(!lite)fprintf(stdout, "EarlyPrefetch = %d\n", stat_total_early_prefetch);
+    /*fprintf(stdout, "MissPrediction = %d [%0.2f]\n", miss_prediction, (float)miss_prediction/totalPrefetchedLines*100);*/
     if(verbose > 0)
     {
         fprintf(stdout, "[ Cache.%s.DEMAND_MISS_MAP]\n", name);
@@ -192,7 +272,7 @@ void LRUCache::final_stats(int verbose)
         fprintf(stdout, "[ Cache.%s.PC_PREFETCH_MAP]\n", name);
         std::unordered_map<unsigned int, stat_t*>::iterator it;
         for(it=pc_prefetch_map.begin();it!=pc_prefetch_map.end();++it)
-            fprintf(stdout, "%*x %*d %*d\n", 7, it->first, 7, it->second->counter1, 7, it->second->counter2);
+            fprintf(stdout, "%*x %*d %*d %*d\n", 7, it->first, 7, it->second->counter1, 7, it->second->counter3, 7, it->second->counter2);
     }
 }
 

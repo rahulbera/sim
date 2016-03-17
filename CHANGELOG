@@ -1,0 +1,4 @@
+v0.6
+=======================================================
+Built-in WSSC. It helps prefetcher to monitor prefetch
+usages and turn off accordingly.	

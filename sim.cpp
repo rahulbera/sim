@@ -3,8 +3,8 @@
 #include <zlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include "prefetcher/StreamPrefetcher.h"
 #include "prefetcher/SMSPrefetcher.h"
+#include "prefetcher/wssc.h"
 #include "cache/LRUCache.h"
 
 #define B 1
@@ -23,6 +23,7 @@ static bool prefetcher_on;
 static bool cache_on;
 static int  l1_verbose;
 static int  l2_verbose;
+static bool cache_lite;
 static unsigned int begin, end;
 static unsigned int count; 
 static char help[1000] = 
@@ -46,12 +47,15 @@ static char help[1000] =
 				"	Enables cache by default. Hides heartbeat.\n"
 				"--[l1|l2]verbose <n>\n"
 				"	Cache verbose level, from 0-4. Default 0.\n"
+				"--expand-cache-stat\n"
+				"	Gives a broader idea of cache stats. Default false.\n"
 				"--hide-heartbeat\n"
 				"	Hides heart beat stats.\n"
 				"--no-prefetch\n"
 				"	Disables prefetcher.\n"
 				"--no-cache\n"
-				"	Disables cache hierarchy.\n";
+				"	Disables cache hierarchy.\n"
+				;
 
 void sim_parse_command_line(int argc, char *argv[])
 {
@@ -121,6 +125,11 @@ void sim_parse_command_line(int argc, char *argv[])
 			l2_verbose = atoi(argv[++i]);
 			continue;
 		}
+		if(!strcmp(argv[i], "--expand-cache-stat"))
+		{
+			cache_lite = false;
+			continue;
+		}
 		if(!strcmp(argv[i], "--hide-heartbeat"))
 		{
 			hide_heart_beat = true;
@@ -173,6 +182,7 @@ void sim_init()
 	cache_on = true;
 	l1_verbose = 0;
 	l2_verbose = 0;
+	cache_lite = true;
 	count = 0;
 }
 
@@ -190,15 +200,18 @@ int main(int argc, char *argv[])
 	gfp = gzopen(trace_file_name,"r");
 	ASSERT(gfp!=Z_NULL,"Can't open file\n");
 
-	/* Cache specification */
-	LRUCache l1 = LRUCache("L1D", 4, 64*B, 32*KB);
-	LRUCache l2 = LRUCache("L2", 16, 64*B, 2*MB);
-	
-	/* Prefetcher specification */
-	StreamPrefetcher sp;
-	sp.prefetcher_init("Uni", 64);
+	/* SYSTEM DECLARATION BEGIN */
+
+	LRUCache l1 = LRUCache("L1D", 4, 64*B, 32*KB, 1, 3, cache_lite);
+	LRUCache l2 = LRUCache("L2", 16, 64*B, 2*MB, 1024, 3, cache_lite);
 	SMSPrefetcher smsp;
 	smsp.prefetcher_init("SMS", 16, 32, 16*1024, 8);
+	wssc wssc_map = wssc("SMS", 4*1024, 8, 1000000);
+	wssc_map.link_prefetcher(&smsp);
+	l2.link_wssc(&wssc_map);
+	smsp.link_wssc(&wssc_map);
+
+	/* SYSTEM DECALARATION END */
 
 	unsigned int pc, addr, prefAddr;
 	unsigned int *prefList; int size;
@@ -242,10 +255,6 @@ int main(int argc, char *argv[])
 
 		if(prefetcher_on)
 		{
-			/*res = sp.prefetcher_operate(pc, addr, (&prefAddr));
-			if(res != -1 && cache_on) 
-				l2.update(prefAddr,true);
-			*/
 			res = smsp.prefetcher_operate(pc, addr, (&prefList), &size);
 			if(res != -1 && cache_on)
 			{
@@ -259,11 +268,9 @@ int main(int argc, char *argv[])
 		{
 			fprintf(stderr, "Processed: %*d ", 3, count/heart_beat);
 			if(prefetcher_on) 
-				//sp.prefetcher_heartbeat_stats();
 				smsp.prefetcher_heartbeat_stats();
 			if(cache_on)
 			{
-				//l1.heart_beat_stats();
 				l2.heart_beat_stats(0);
 			}
 			fprintf(stderr,"\n");
@@ -276,12 +283,12 @@ int main(int argc, char *argv[])
 		l1.final_stats(l1_verbose);
 		l2.final_stats(l2_verbose);
 	}
-	if(prefetcher_on)
-		//sp.prefetcher_final_stats();
-		smsp.prefetcher_final_stats();
 
 	if(prefetcher_on)
-		//sp.prefetcher_destroy();
+		smsp.prefetcher_final_stats();
+	wssc_map.final_stats();
+
+	if(prefetcher_on)
 		smsp.prefetcher_destroy();
 
 	return 0;
