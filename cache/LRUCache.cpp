@@ -1,15 +1,19 @@
 #include <assert.h>
 #include "LRUCache.h"
 
-LRUCache::LRUCache(char *s, unsigned int a, unsigned int b, unsigned int c, unsigned int n, unsigned int m, bool isLite):BaseCache(s,a,b,c)
+LRUCache::LRUCache()
 {
-    sht_size = n;
-    sig_size = log2(n);
-    sht = (Counter*)malloc(sht_size * sizeof(Counter));
-    assert(sht!=NULL);
-    for(int i=0;i<sht_size;++i)
-        sht[i] = Counter(m);
 
+}
+
+LRUCache::~LRUCache()
+{
+
+}
+
+void LRUCache::init(char *s, unsigned int a, unsigned int b, unsigned int c, bool isLite)
+{
+    BaseCache::init(s,a,b,c);
     lite = isLite;
     wssc_map = NULL;
     wssc_interval = 0;
@@ -19,10 +23,6 @@ LRUCache::LRUCache(char *s, unsigned int a, unsigned int b, unsigned int c, unsi
     miss_prediction = 0;
 }
 
-LRUCache::~LRUCache()
-{
-    free(sht);
-}
 
 int LRUCache::find(unsigned int setIndex, unsigned int tag)
 {
@@ -259,7 +259,6 @@ void LRUCache::final_stats(int verbose)
     fprintf(stdout, "PrefetchedUnused = %d [%0.2f]\n", totalPrefetchedUnusedLines, (float)totalPrefetchedUnusedLines/totalPrefetchedLines*100);
     fprintf(stdout, "PerfectPrefetch = %d [%0.2f]\n", perfect_prefetch, (float)perfect_prefetch/totalPrefetchedLines*100);
     if(!lite)fprintf(stdout, "EarlyPrefetch = %d\n", stat_total_early_prefetch);
-    /*fprintf(stdout, "MissPrediction = %d [%0.2f]\n", miss_prediction, (float)miss_prediction/totalPrefetchedLines*100);*/
     if(verbose > 0)
     {
         fprintf(stdout, "[ Cache.%s.DEMAND_MISS_MAP]\n", name);

@@ -45,17 +45,13 @@ class LRUCache : public BaseCache
         unsigned int stat_total_early_prefetch;
         unsigned int perfect_prefetch;
         unsigned int miss_prediction;
-
-        /* Prediction purpose */
-        Counter *sht;
-        unsigned int sht_size;
-        unsigned int sig_size;
         
     public:
-        LRUCache(char*,unsigned int,unsigned int,unsigned int,unsigned int,unsigned int,bool);
+        LRUCache();
         ~LRUCache();
         
         /*Base class functions */
+        void init(char*,unsigned int,unsigned int,unsigned int,bool);
         int find(unsigned int,unsigned int);
         int find(unsigned int);
         void promotion(unsigned int,unsigned int, bool);

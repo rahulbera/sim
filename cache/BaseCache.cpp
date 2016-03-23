@@ -13,7 +13,17 @@ CacheLine::CacheLine()
     valid = false;
 }
 
-BaseCache::BaseCache(char *s, unsigned int a,unsigned int b,unsigned int c)
+BaseCache::BaseCache()
+{
+
+}
+
+BaseCache::~BaseCache()
+{
+    free(cache);
+}
+
+void BaseCache::init(char *s, unsigned int a,unsigned int b,unsigned int c)
 {
     strcpy(name, s);
     associativity=a;
@@ -34,10 +44,6 @@ BaseCache::BaseCache(char *s, unsigned int a,unsigned int b,unsigned int c)
     for(unsigned int i=0;i<16;++i) reuseCountBucket[i] = 0;
 }
 
-BaseCache::~BaseCache()
-{
-    free(cache);
-}
 
 void BaseCache::heart_beat_stats(int verbose)
 {

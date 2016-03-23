@@ -3,6 +3,7 @@
 #include <zlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <signal.h>
 #include "prefetcher/SMSPrefetcher.h"
 #include "prefetcher/wssc.h"
 #include "cache/LRUCache.h"
@@ -12,10 +13,11 @@
 #define MB (1024*KB)
 
 static char trace_file_name[1000];
+static gzFile gfp;
 static bool trace_dump;
 static bool l1trace_dump;
 static bool l2trace_dump;
-static int heart_beat;
+static int  heart_beat;
 static bool hide_heart_beat;
 static bool hasBegin;
 static bool hasEnd;
@@ -56,6 +58,11 @@ static char help[1000] =
 				"--no-cache\n"
 				"	Disables cache hierarchy.\n"
 				;
+
+static LRUCache l1;
+static LRUCache l2;
+static SMSPrefetcher smsp;
+static wssc wssc_map;
 
 void sim_parse_command_line(int argc, char *argv[])
 {
@@ -186,9 +193,34 @@ void sim_init()
 	count = 0;
 }
 
+void sim_fini(int signum)
+{
+	if(cache_on)
+	{
+		l1.wrap_up();
+		l2.wrap_up();
+		l1.final_stats(l1_verbose);
+		l2.final_stats(l2_verbose);
+	}
+
+	if(prefetcher_on)
+		smsp.prefetcher_final_stats();
+
+	wssc_map.final_stats();
+
+	if(prefetcher_on)
+		smsp.prefetcher_destroy();
+
+	gzclose(gfp);
+
+	exit(signum);
+}
+
 
 int main(int argc, char *argv[])
 {
+	signal(SIGINT, sim_fini);
+
 	sim_init();
 	sim_parse_command_line(argc, argv);
 
@@ -196,27 +228,26 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Trace file: %s\n", trace_file_name);
 	#endif
 
-	gzFile gfp;
 	gfp = gzopen(trace_file_name,"r");
 	ASSERT(gfp!=Z_NULL,"Can't open file\n");
 
 	/* SYSTEM DECLARATION BEGIN */
 
-	LRUCache l1 = LRUCache("L1D", 4, 64*B, 32*KB, 1, 3, cache_lite);
-	LRUCache l2 = LRUCache("L2", 16, 64*B, 2*MB, 1024, 3, cache_lite);
-	SMSPrefetcher smsp;
+	l1.init("L1D", 4, 64*B, 32*KB, cache_lite);
+	l2.init("L2", 16, 64*B, 2*MB, cache_lite);
 	smsp.prefetcher_init("SMS", 16, 32, 16*1024, 8);
-	wssc wssc_map = wssc("SMS", 4*1024, 8, 1000000);
+	wssc_map.init("SMS", 4*1024, 8, 1000000);
 	wssc_map.link_prefetcher(&smsp);
 	l2.link_wssc(&wssc_map);
 	smsp.link_wssc(&wssc_map);
 
 	/* SYSTEM DECALARATION END */
 
-	unsigned int pc, addr, prefAddr;
+	unsigned int pc, addr;
 	unsigned int *prefList; int size;
 	bool isRead;
 	int n, res, foundInL1, foundInL2;
+	fprintf(stderr, "Press Ctrl+C to stop simulation\n");
 	while(gzread(gfp,(void*)(&pc),sizeof(unsigned int)) != 0)
 	{
 		count++;
@@ -278,18 +309,5 @@ int main(int argc, char *argv[])
 		
 	}
 
-	if(cache_on)
-	{
-		l1.final_stats(l1_verbose);
-		l2.final_stats(l2_verbose);
-	}
-
-	if(prefetcher_on)
-		smsp.prefetcher_final_stats();
-	wssc_map.final_stats();
-
-	if(prefetcher_on)
-		smsp.prefetcher_destroy();
-
-	return 0;
+	sim_fini(0);
 }

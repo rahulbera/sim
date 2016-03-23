@@ -48,6 +48,8 @@ class SMSPrefetcher : public Prefetcher
 		unsigned int stat_total_threshold_check_failure;
 		unsigned int stat_total_acc_to_pht;
 		unsigned int stat_total_pht_table_rep;
+		unsigned int stat_total_pht_pattern_update;
+		unsigned int tc_max, uc_max;
 
 	public:
 		SMSPrefetcher(){}
@@ -68,6 +70,7 @@ class SMSPrefetcher : public Prefetcher
 		void debug_acc_entry(int);
 		void debug_fil_entry(int);
 		void debug_pht_entry(int,int);
+		void dump(unsigned int);
 
 		unsigned int log2(unsigned int);
 };

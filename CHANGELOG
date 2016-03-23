@@ -1,4 +1,9 @@
+v0.6.1
+=======================================================
+Added interrupt handler. Changed cache and wssc constructor
+functions. Minor bug fixes in wssc.
+
 v0.6
 =======================================================
 Built-in WSSC. It helps prefetcher to monitor prefetch
-usages and turn off accordingly.	
+usages and turn off accordingly.

@@ -36,8 +36,9 @@ class wssc
 		uint total_invalidation;
 
 	public:
-		wssc(char*, uint, uint, ulong);
+		wssc();
 		~wssc();
+		void init(char*, uint, uint, ulong);
 		void link_prefetcher(SMSPrefetcher*);
 		ulong get_interval();
 		bool find(uint,uint*,uint*,uint*);
@@ -46,6 +47,10 @@ class wssc
 		void invalidate();
 		void heart_beat_stats();
 		void final_stats();
+
+		/* debug functions */
+		void debug_wssc_entry(uint, uint);
+		void dump(uint);
 	
 	private:
 		uint log2(uint);

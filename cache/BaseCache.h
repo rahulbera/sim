@@ -43,9 +43,10 @@ class BaseCache
         unsigned int    stat_heart_beat_hit, stat_heart_beat_miss;
     
     public:
-        BaseCache(char*,unsigned int,unsigned int,unsigned int);
+        BaseCache();
         ~BaseCache();
         
+        virtual void init(char*,unsigned int,unsigned int,unsigned int);
         virtual int find(unsigned int,unsigned int)=0;
         virtual void promotion(unsigned int,unsigned int, bool)=0;
         virtual unsigned int victimize(unsigned int)=0;
