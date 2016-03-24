@@ -5,8 +5,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
-#include <unordered_map>
-#include "util.h"
+#include "../common/util.h"
 #define ASSERT(cond,msg) do{if(!(cond)){fprintf(stderr,msg);exit(1);}}while(0)
 
 class CacheLine

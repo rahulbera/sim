@@ -2,14 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "SMSPrefetcher.h"
-
-#define LINE_SIZE_LOG 6
-#define REGION_SIZE_LOG 12
-#define OFFSET_LOG (REGION_SIZE_LOG - LINE_SIZE_LOG)
-#define MAX_OFFSET (1<<(OFFSET_LOG))
-
-#define THRESHOLD 0.25
-#define WSSC_HELP 1
+#include "../common/vars.h"
 
 unsigned int SMSPrefetcher::log2(unsigned int n)
 {
@@ -381,12 +374,14 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	#endif
 
 	/* Calling insert of WSSC */
-	if(wssc_map) wssc_map->insert(region, temp, pht_table[setIndex][index].pattern, n);
+	bool wssc_insert_res = false;
+	if(wssc_map) 
+		wssc_insert_res = wssc_map->insert(region, temp, pht_table[setIndex][index].pattern, n);
 
 	/* Check UC/TC ratio. If it's
 	 * less than GOLDEN_THROSHOLD, don't prefetch
 	 */
-	if(WSSC_HELP && pht_table[setIndex][index].tc!=0)
+	if(WSSC_HELP && /*n<10 &&*/ pht_table[setIndex][index].tc!=0)
 	{
 		float ratio = (float)pht_table[setIndex][index].uc / pht_table[setIndex][index].tc;
 		if(ratio < THRESHOLD)

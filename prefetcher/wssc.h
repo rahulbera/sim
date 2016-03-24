@@ -42,7 +42,7 @@ class wssc
 		void link_prefetcher(SMSPrefetcher*);
 		ulong get_interval();
 		bool find(uint,uint*,uint*,uint*);
-		void insert(uint, ulong, bool*, uint);
+		bool insert(uint, ulong, bool*, uint);
 		void update(uint, uint);
 		void invalidate();
 		void heart_beat_stats();

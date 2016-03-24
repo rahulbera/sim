@@ -2,7 +2,7 @@
 #define	LRUCACHE_H
 
 #include "BaseCache.h"
-#include "util.h"
+#include <unordered_map>
 #include "../prefetcher/wssc.h"
 
 

@@ -2,11 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "wssc.h"
-
-#define LINE_SIZE_LOG 6
-#define REGION_SIZE_LOG 12
-#define OFFSET_LOG (REGION_SIZE_LOG - LINE_SIZE_LOG)
-#define MAX_OFFSET (1<<(OFFSET_LOG))
+#include "../common/vars.h"
 
 wssc::wssc()
 {
@@ -96,8 +92,8 @@ bool wssc::find(uint page, uint *s, uint *w, uint *t)
 void wssc::invalidate()
 {
 	total_invalidation++;
-	dump(total_invalidation);
-	prefetcher->dump(total_invalidation);
+	//dump(total_invalidation);
+	//prefetcher->dump(total_invalidation);
 	for(uint i=0;i<sets;++i)
 	{
 		for(uint j=0;j<associativity;++j)
@@ -114,8 +110,11 @@ void wssc::invalidate()
 
 /* Prefetcher calls this function
  * during issuing a new prefetch vector
+ * Returns true if it actually creates 
+ * a new page tracker. False if WSSC is
+ * already monitoring the page from past.
  */
-void wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
+bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 {
 	uint setIndex, wayIndex, tag;
 	bool found = find(page, &setIndex, &wayIndex, &tag);
@@ -156,6 +155,7 @@ void wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 		#ifdef DEBUG
 			debug_wssc_entry(setIndex,wayIndex);
 		#endif
+		return false;
 	}
 
 	/* If the page is not found inside wssc */
@@ -188,6 +188,7 @@ void wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 				debug_wssc_entry(setIndex, repIndex);
 			#endif
 		}
+		return true;
 	}
 }
 

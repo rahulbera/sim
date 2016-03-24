@@ -2,8 +2,9 @@ CXX=g++
 MAIN = sim.cpp
 PREFETCHER = prefetcher
 CACHE = cache
+COMMON = common
 CXXFLAGS = -std=c++11 -o2 -Wall
-DEPS = $(PREFETCHER)/wssc.o $(PREFETCHER)/SMSPrefetcher.o $(CACHE)/util.o $(CACHE)/BaseCache.o $(CACHE)/LRUCache.o
+DEPS = $(COMMON)/util.o $(PREFETCHER)/wssc.o $(PREFETCHER)/SMSPrefetcher.o $(CACHE)/BaseCache.o $(CACHE)/LRUCache.o
 
 all: release debug
 
@@ -11,18 +12,21 @@ all: release debug
 debug: CXXFLAGS += -g -DDEBUG
 debug: EXE = sim_debug
 debug: $(MAIN)
+	@cd $(COMMON) && make debug
 	@cd $(PREFETCHER) && make debug
 	@cd $(CACHE) && make debug
 	$(CXX) $(CXXFLAGS) -o sim_debug $(MAIN) $(DEPS) -lz
 
 .PHONY: release
 release: $(MAIN)
+	@cd $(COMMON) && make release
 	@cd $(PREFETCHER) && make release
 	@cd $(CACHE) && make release
 	$(CXX) $(CXXFLAGS) -o sim $(MAIN) $(DEPS) -lz
 
 .PHONY: clean
 clean:
+	@cd $(COMMON) && make clean
 	@cd $(PREFETCHER) && make clean
 	@cd $(CACHE) && make clean
 	@rm -f sim sim_debug

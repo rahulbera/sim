@@ -258,7 +258,7 @@ void LRUCache::final_stats(int verbose)
     fprintf(stdout, "Prefetched = %d\n", totalPrefetchedLines);
     fprintf(stdout, "PrefetchedUnused = %d [%0.2f]\n", totalPrefetchedUnusedLines, (float)totalPrefetchedUnusedLines/totalPrefetchedLines*100);
     fprintf(stdout, "PerfectPrefetch = %d [%0.2f]\n", perfect_prefetch, (float)perfect_prefetch/totalPrefetchedLines*100);
-    if(!lite)fprintf(stdout, "EarlyPrefetch = %d\n", stat_total_early_prefetch);
+    if(!lite)fprintf(stdout, "EarlyPrefetch = %d [%02.f]\n", stat_total_early_prefetch, (float)stat_total_early_prefetch/totalPrefetchedUnusedLines*100);
     if(verbose > 0)
     {
         fprintf(stdout, "[ Cache.%s.DEMAND_MISS_MAP]\n", name);

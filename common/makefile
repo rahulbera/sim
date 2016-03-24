@@ -1,5 +1,5 @@
 CXX = g++
-CORE = BaseCache.o LRUCache.o
+CORE = util.o
 CXXFLAGS = -std=c++11 -o2
 
 all: release debug
@@ -15,5 +15,5 @@ release: $(CORE)
 	$(CXX) -c $(CXXFLAGS) -o $@ $<
 
 clean:
-	@echo "Cleaning cache directory..."
+	@echo "Cleaning common directory..."
 	@rm -f *.o

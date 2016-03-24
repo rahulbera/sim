@@ -7,10 +7,7 @@
 #include "prefetcher/SMSPrefetcher.h"
 #include "prefetcher/wssc.h"
 #include "cache/LRUCache.h"
-
-#define B 1
-#define KB (1024*B)
-#define MB (1024*KB)
+#include "common/vars.h"
 
 static char trace_file_name[1000];
 static gzFile gfp;
@@ -233,10 +230,10 @@ int main(int argc, char *argv[])
 
 	/* SYSTEM DECLARATION BEGIN */
 
-	l1.init("L1D", 4, 64*B, 32*KB, cache_lite);
-	l2.init("L2", 16, 64*B, 2*MB, cache_lite);
-	smsp.prefetcher_init("SMS", 16, 32, 16*1024, 8);
-	wssc_map.init("SMS", 4*1024, 8, 1000000);
+	l1.init("L1D", L1D_A, L1D_B, L1D_C, cache_lite);
+	l2.init("L2", L2_A, L2_B, L2_C, cache_lite);
+	smsp.prefetcher_init("SMS", SMS_ACC, SMS_FIL, SMS_PHT, SMS_PHT_A);
+	wssc_map.init("SMS", WSSC_S, WSSC_A, WSSC_I);
 	wssc_map.link_prefetcher(&smsp);
 	l2.link_wssc(&wssc_map);
 	smsp.link_wssc(&wssc_map);
