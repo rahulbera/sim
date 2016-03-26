@@ -7,6 +7,7 @@
 #include "prefetcher/SMSPrefetcher.h"
 #include "prefetcher/wssc.h"
 #include "cache/LRUCache.h"
+#include "cache/DRRIPCache.h"
 #include "common/vars.h"
 
 static char trace_file_name[1000];
@@ -57,7 +58,11 @@ static char help[1000] =
 				;
 
 static LRUCache l1;
-static LRUCache l2;
+#if L2_TYPE == 1
+	static LRUCache l2;
+#else
+	static DRRIPCache l2;
+#endif
 static SMSPrefetcher smsp;
 static wssc wssc_map;
 
@@ -230,8 +235,12 @@ int main(int argc, char *argv[])
 
 	/* SYSTEM DECLARATION BEGIN */
 
-	l1.init("L1D", L1D_A, L1D_B, L1D_C, cache_lite);
-	l2.init("L2", L2_A, L2_B, L2_C, cache_lite);
+	l1.init("L1D", "LRU", L1D_A, L1D_B, L1D_C, cache_lite);
+	#if L2_TYPE == 1
+		l2.init("L2", "LRU", L2_A, L2_B, L2_C, cache_lite);
+	#else
+		l2.init("L2", "DRRIP", L2_A, L2_B, L2_C, RRPV_SIZE, THROTTLE, PSEL_SIZE, cache_lite);
+	#endif
 	smsp.prefetcher_init("SMS", SMS_ACC, SMS_FIL, SMS_PHT, SMS_PHT_A);
 	wssc_map.init("SMS", WSSC_S, WSSC_A, WSSC_I);
 	wssc_map.link_prefetcher(&smsp);

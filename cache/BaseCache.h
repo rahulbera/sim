@@ -29,6 +29,7 @@ class BaseCache
 {
     public:
         char            name[100];
+        char            type[20];
         unsigned int    associativity;
         unsigned int    noOfSets;
         unsigned int    setsInPowerOfTwo;
@@ -45,7 +46,7 @@ class BaseCache
         BaseCache();
         ~BaseCache();
         
-        virtual void init(char*,unsigned int,unsigned int,unsigned int);
+        virtual void init(char*,char*,unsigned int,unsigned int,unsigned int);
         virtual int find(unsigned int,unsigned int)=0;
         virtual void promotion(unsigned int,unsigned int, bool)=0;
         virtual unsigned int victimize(unsigned int)=0;

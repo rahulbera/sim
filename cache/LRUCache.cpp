@@ -11,9 +11,9 @@ LRUCache::~LRUCache()
 
 }
 
-void LRUCache::init(char *s, unsigned int a, unsigned int b, unsigned int c, bool isLite)
+void LRUCache::init(char *s, char *t, unsigned int a, unsigned int b, unsigned int c, bool isLite)
 {
-    BaseCache::init(s,a,b,c);
+    BaseCache::init(s,t,a,b,c);
     lite = isLite;
     wssc_map = NULL;
     wssc_interval = 0;
@@ -181,7 +181,20 @@ void LRUCache::link_wssc(wssc *w)
 void LRUCache::insert_early_prefetch_map(unsigned int setIndex, unsigned int wayIndex)
 {
     unsigned int lineAddr = ((cache[setIndex][wayIndex].tag << (setsInPowerOfTwo + offset)) + (setIndex << offset));
-    early_prefetch.insert(std::pair<unsigned int, unsigned int>(lineAddr, cache[setIndex][wayIndex].pc));
+    std::unordered_map<unsigned int, ep_t*>::iterator it = early_prefetch.find(lineAddr);
+    if(it != early_prefetch.end())
+    {
+        if(it->second->pc == cache[setIndex][wayIndex].pc)
+        {
+            it->second->count++;
+            return;
+        }
+    }
+    ep_t *temp = (ep_t*)malloc(sizeof(ep_t));
+    ASSERT(temp!=NULL, "Early prefetch entry creation failed!\n");
+    temp->pc = cache[setIndex][wayIndex].pc;
+    temp->count = 1;
+    early_prefetch.insert(std::pair<unsigned int, ep_t*>(lineAddr, temp));
 }
 
 void LRUCache::update_early_prefetch_map(unsigned int pc, unsigned int lineAddr)
@@ -199,16 +212,16 @@ void LRUCache::update_early_prefetch_map(unsigned int pc, unsigned int lineAddr)
         mi->second->counter1++;
 
     
-    std::unordered_map<unsigned int, unsigned int>::iterator it = early_prefetch.find(lineAddr);
+    std::unordered_map<unsigned int, ep_t*>::iterator it = early_prefetch.find(lineAddr);
     if(it != early_prefetch.end())
     {
-        stat_total_early_prefetch++;
+        stat_total_early_prefetch += it->second->count;
         mi = demand_miss_map.find(pc);
         mi->second->counter2++;
-        unsigned int  generating_pc = it->second;
+        unsigned int  generating_pc = it->second->pc;
         std::unordered_map<unsigned int, stat_t*>::iterator it2 = pc_prefetch_map.find(generating_pc);
         if(it2 != pc_prefetch_map.end())
-            it2->second->counter2++;
+            it2->second->counter2 += it->second->count;
         early_prefetch.erase(it);
     }
 }
@@ -258,7 +271,7 @@ void LRUCache::final_stats(int verbose)
     fprintf(stdout, "Prefetched = %d\n", totalPrefetchedLines);
     fprintf(stdout, "PrefetchedUnused = %d [%0.2f]\n", totalPrefetchedUnusedLines, (float)totalPrefetchedUnusedLines/totalPrefetchedLines*100);
     fprintf(stdout, "PerfectPrefetch = %d [%0.2f]\n", perfect_prefetch, (float)perfect_prefetch/totalPrefetchedLines*100);
-    if(!lite)fprintf(stdout, "EarlyPrefetch = %d [%02.f]\n", stat_total_early_prefetch, (float)stat_total_early_prefetch/totalPrefetchedUnusedLines*100);
+    if(!lite)fprintf(stdout, "EarlyPrefetch = %d [%0.2f]\n", stat_total_early_prefetch, (float)stat_total_early_prefetch/totalPrefetchedUnusedLines*100);
     if(verbose > 0)
     {
         fprintf(stdout, "[ Cache.%s.DEMAND_MISS_MAP]\n", name);

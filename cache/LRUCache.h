@@ -11,12 +11,11 @@ typedef struct stat
     unsigned int counter1, counter2, counter3;
 }stat_t;
 
-typedef struct predictor
+typedef struct early_prefetch_entry
 {
-    unsigned int tag;
-    int age;
-    bool valid;
-}predictor_t;
+    unsigned int pc;
+    unsigned int count;
+}ep_t;
 
 class wssc;
 
@@ -27,9 +26,9 @@ class LRUCache : public BaseCache
         wssc* wssc_map;
         unsigned long int wssc_interval;
         /* Stores prefetch lines which are evicted from cache 
-         * without getting demand access in <LINE,PC> format
+         * without getting demand access in <LINE,ep_t> format
          */
-        std::unordered_map<unsigned int, unsigned int> early_prefetch;
+        std::unordered_map<unsigned int, ep_t*> early_prefetch;
         /* Stores total misses faced by a PC 
          * and number of early prefetch
          */
@@ -51,7 +50,7 @@ class LRUCache : public BaseCache
         ~LRUCache();
         
         /*Base class functions */
-        void init(char*,unsigned int,unsigned int,unsigned int,bool);
+        void init(char*,char*,unsigned int,unsigned int,unsigned int,bool);
         int find(unsigned int,unsigned int);
         int find(unsigned int);
         void promotion(unsigned int,unsigned int, bool);

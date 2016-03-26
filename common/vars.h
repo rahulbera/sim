@@ -9,9 +9,13 @@
 #define L1D_B 64*B
 #define L1D_C 32*KB
 
+#define L2_TYPE 2 //1=LRU;2=DRRIP
 #define L2_A 16
 #define L2_B 64*B
 #define L2_C 2*MB
+#define RRPV_SIZE 2
+#define THROTTLE 32
+#define PSEL_SIZE 10
 
 #define LINE_SIZE_LOG 6
 #define REGION_SIZE_LOG 12
@@ -23,12 +27,12 @@
 #define SMS_PHT (16*1024)
 #define SMS_PHT_A 8
 #define THRESHOLD 0.25
-#define WSSC_HELP 1
+#define WSSC_HELP 0
 
 #define WSSC_S (4*1024)
 #define WSSC_A 8
-#define WSSC_I 1000000
-//#define WSSC_I (4*1024*1024)
+#define WSSC_I (4*1024*1024)
+//#define WSSC_I 1000000
 
 
 #endif /* VARS_H */

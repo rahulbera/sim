@@ -403,6 +403,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 		fprintf(stderr, "Prefetch %d\n", n);
 	#endif
 	
+
 	unsigned int *prefList = (unsigned int*)malloc(n*sizeof(unsigned int));
 	ASSERT(prefList!=NULL, "Pref list allocation failed!\n");
 	int k = 0;
@@ -552,8 +553,11 @@ void SMSPrefetcher::debug_fil_entry(int index)
 
 void SMSPrefetcher::debug_pht_entry(int setIndex, int wayIndex)
 {
+	unsigned long int temp = (unsigned long int)(pht_table[setIndex][wayIndex].tag << pht_table_sets_log) + (unsigned long int)setIndex;
+	unsigned int pc = temp >> OFFSET_LOG;
+	unsigned int offset = temp & (MAX_OFFSET-1);
 	fprintf(stderr, "PHT:<");
-	fprintf(stderr, "%*lx|", 7, pht_table[setIndex][wayIndex].tag);
+	fprintf(stderr, "%*lx|%*x|%*d|", 7, pht_table[setIndex][wayIndex].tag, 8, pc, 2, offset);
 	for(int i=0;i<MAX_OFFSET;++i) fprintf(stderr, "%d", pht_table[setIndex][wayIndex].pattern[i]);
 	fprintf(stderr, "|%d|%d>\n", pht_table[setIndex][wayIndex].tc, pht_table[setIndex][wayIndex].uc);
 }

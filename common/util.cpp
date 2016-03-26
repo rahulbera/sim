@@ -7,34 +7,44 @@ unsigned int log2(unsigned int n)
     else return (1+log2(n/2));
 }
 
+Monitor::Monitor()
+{
 
-Counter::Counter(unsigned int n)
+}
+
+Monitor::Monitor(unsigned int n)
 {
 	max_count = (1 << n) - 1;
 	c = 1 << (n-1);
 }
 
-Counter::~Counter()
+Monitor::~Monitor()
 {
 
 }
 
-void Counter::inc()
+void Monitor::set(unsigned int n)
+{
+	max_count = (1 << n) - 1;
+	c = 1 << (n-1);
+}
+
+void Monitor::inc()
 {
 	if(c < max_count) c++;
 }
 
-void Counter::dec()
+void Monitor::dec()
 {
 	if(c > 0) c--;
 }
 
-unsigned int Counter::value()
+unsigned int Monitor::value()
 {
 	return c;
 }
 
-unsigned int Counter::max()
+unsigned int Monitor::max()
 {
 	return max_count;
 }

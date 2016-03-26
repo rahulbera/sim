@@ -23,9 +23,10 @@ BaseCache::~BaseCache()
     free(cache);
 }
 
-void BaseCache::init(char *s, unsigned int a,unsigned int b,unsigned int c)
+void BaseCache::init(char *s, char *t, unsigned int a,unsigned int b,unsigned int c)
 {
     strcpy(name, s);
+    strcpy(type, t);
     associativity=a;
     noOfSets = c/(a*b);
     setsInPowerOfTwo = log2(noOfSets);
@@ -54,6 +55,7 @@ void BaseCache::heart_beat_stats(int verbose)
 void BaseCache::final_stats(int verbose)
 {
     fprintf(stdout, "[ Cache.%s ]\n", name);
+    fprintf(stdout, "Type = %s\n", type);
     fprintf(stdout, "TotalAccesses =  %d\n", totalAccess);
     fprintf(stdout, "Hits =  %d\n", hit);
     fprintf(stdout, "Misses =  %d [%0.2f]\n", miss, (float)miss/totalAccess*100);
