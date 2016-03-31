@@ -1,6 +1,6 @@
 CXX = g++
 CORE = wssc.o SMSPrefetcher.o
-CXXFLAGS = -o2
+CXXFLAGS = -o2 --std=c++11
 
 all: release debug
 

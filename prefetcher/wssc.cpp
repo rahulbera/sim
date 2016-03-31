@@ -47,6 +47,10 @@ void wssc::init(char *s, uint n, uint a, ulong i)
 	}
 
 	total_invalidation = 0;
+	total_wssc_access = 0;
+	total_insert = 0;
+	samePHTAccess = 0;
+	replacementNeeded = 0;
 }
 
 uint wssc::log2(uint n)
@@ -116,6 +120,7 @@ void wssc::invalidate()
  */
 bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 {
+	total_wssc_access++;
 	uint setIndex, wayIndex, tag;
 	bool found = find(page, &setIndex, &wayIndex, &tag);
 
@@ -127,6 +132,18 @@ bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 	/* If the page is already being monitored by wssc */
 	if(found)
 	{
+		total_insert++;
+		uint pc = (uint)(pht_tag >> 6);
+		std::unordered_map<uint,counter_t*>::iterator it = pc_prefetch_map.find(pc);
+		if(it != pc_prefetch_map.end())
+			it->second->counter1 += n;
+		else
+		{
+			counter_t *temp = (counter_t*)malloc(sizeof(counter_t));
+			temp->counter1 = n;
+			temp->counter2 = 0;
+			pc_prefetch_map.insert(std::pair<uint,counter_t*>(pc,temp));
+		}
 		#ifdef DEBUG
 			fprintf(stderr, "New page access: found in WSSC, S:%d W:%d\n", setIndex, wayIndex);
 			debug_wssc_entry(setIndex, wayIndex);
@@ -134,23 +151,27 @@ bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 		ASSERT(setIndex>=0 && wayIndex>=0, "Invalid setIndex/wayIndex\n");
 		if(map[setIndex][wayIndex].pht_tag == pht_tag)
 		{
+			samePHTAccess++;
 			#ifdef DEBUG
 				fprintf(stderr, "Accessed by same pht_tag:%lx\n", pht_tag);
 				fprintf(stderr, "Incrementing TC of %lx by %d\n", pht_tag, n);
 			#endif
-			prefetcher->incr_tc(pht_tag, n);
+			uint m = 0;
+			for(uint i=0;i<MAX_OFFSET;++i) {if(map[setIndex][wayIndex].pattern[i] && pattern[i]) m++;}
 			for(uint i=0;i<MAX_OFFSET;++i)
 				map[setIndex][wayIndex].pattern[i] = (map[setIndex][wayIndex].pattern[i] | pattern[i]);
+			prefetcher->incr_tc(pht_tag, (n-m));
 		}
 		else
 		{
 			#ifdef DEBUG
 				fprintf(stderr, "Different pht_tag accessing same page %lx and %lx\n", map[setIndex][wayIndex].pht_tag, pht_tag);
+				fprintf(stderr, "PHT of PC:%x access collision to same page %x by PC:%x", (uint)(map[setIndex][wayIndex].pht_tag>>6), page, (uint)(pht_tag>>6));
 			#endif
 			map[setIndex][wayIndex].pht_tag = pht_tag;
-			prefetcher->incr_tc(pht_tag, n);
 			for(uint i=0;i<MAX_OFFSET;++i)
 				map[setIndex][wayIndex].pattern[i] = pattern[i];
+			prefetcher->incr_tc(pht_tag, n);
 		}
 		#ifdef DEBUG
 			debug_wssc_entry(setIndex,wayIndex);
@@ -175,6 +196,18 @@ bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 		}
 		if(repIndex != -1)
 		{
+			total_insert++;
+			uint pc = (uint)(pht_tag >> 6);
+			std::unordered_map<uint,counter_t*>::iterator it = pc_prefetch_map.find(pc);
+			if(it != pc_prefetch_map.end())
+				it->second->counter1 += n;
+			else
+			{
+				counter_t *temp = (counter_t*)malloc(sizeof(counter_t));
+				temp->counter1 = n;
+				temp->counter2 = 0;
+				pc_prefetch_map.insert(std::pair<uint,counter_t*>(pc,temp));
+			}
 			#ifdef DEBUG
 				fprintf(stderr, "Rep candidate found:[%*d,%d]\n", 3, setIndex, repIndex);
 				debug_wssc_entry(setIndex,repIndex);
@@ -187,8 +220,13 @@ bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 			#ifdef DEBUG
 				debug_wssc_entry(setIndex, repIndex);
 			#endif
+			return true;
 		}
-		return true;
+		else
+		{
+			replacementNeeded++;
+			return false;
+		}
 	}
 }
 
@@ -218,6 +256,10 @@ void wssc::update(uint page, uint offset)
 			#ifdef DEBUG
 				debug_wssc_entry(setIndex,wayIndex);
 			#endif
+			uint pc = (uint)(map[setIndex][wayIndex].pht_tag >> 6);
+			std::unordered_map<uint,counter_t*>::iterator it = pc_prefetch_map.find(pc);
+			if(it != pc_prefetch_map.end())
+				it->second->counter2++;
 		}
 	}
 }
@@ -256,6 +298,14 @@ void wssc::final_stats()
 	fprintf(stdout, "Associativity = %d\n", associativity);
 	fprintf(stdout, "Interval = %lu\n", interval);
 	fprintf(stdout, "Invalidation = %d\n", total_invalidation);
+	fprintf(stdout, "TotalAccess = %d\n", total_wssc_access);
+	fprintf(stdout, "TotalInsertion = %d\n", total_insert);
+	fprintf(stdout, "ReplcementNeeded = %d\n", replacementNeeded);
+	fprintf(stdout, "SamePHTAccess = %d\n", samePHTAccess);
+	fprintf(stdout, "WSSC.PC_PREFECTH_MAP\n");
+	std::unordered_map<uint,counter_t*>::iterator it;
+	for(it=pc_prefetch_map.begin();it!=pc_prefetch_map.end();++it)
+		fprintf(stdout, "%*x %*d %*d\n", 8, it->first, 8, it->second->counter1, 8, it->second->counter2);
 }
 
 void wssc::debug_wssc_entry(uint setIndex, uint wayIndex)

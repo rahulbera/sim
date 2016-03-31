@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <unordered_map>
 #include "SMSPrefetcher.h"
 #define ASSERT(cond,msg) do{if(!(cond)){fprintf(stderr,msg);exit(1);}}while(0)
 
@@ -17,6 +18,12 @@ typedef struct wssc_entry
 	bool *pattern;
 	bool valid;
 }wssc_t;
+
+typedef struct counter
+{
+	uint counter1;
+	uint counter2;
+}counter_t;
 
 class SMSPrefetcher;
 
@@ -34,6 +41,11 @@ class wssc
 
 		/* Stat variables */
 		uint total_invalidation;
+		uint total_wssc_access;
+		uint total_insert;
+		uint replacementNeeded;
+		uint samePHTAccess;
+		std::unordered_map<uint, counter_t*>pc_prefetch_map;
 
 	public:
 		wssc();

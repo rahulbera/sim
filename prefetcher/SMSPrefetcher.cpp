@@ -366,8 +366,17 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	#endif
 	stat_total_pht_hit++;
 
+	/* Created this aux array to mask prefetch of 
+	 * cacheline which generated the prefetch itself.
+	 */
+	bool *final_pattern = (bool*)malloc(MAX_OFFSET*sizeof(bool));
+	ASSERT(final_pattern!=NULL, "Final pattern malloc failed!\n");
+	for(int i=0;i<MAX_OFFSET;++i)
+		final_pattern[i] = pht_table[setIndex][index].pattern[i];
+	final_pattern[offset] = false;
+
 	int n = 0;
-	for(int i=0;i<MAX_OFFSET;++i) {if(pht_table[setIndex][index].pattern[i]) n++;}
+	for(int i=0;i<MAX_OFFSET;++i) {if(final_pattern[i]) n++;}
 
 	#ifdef DEBUG
 		fprintf(stderr, "Sending info to WSSC\n");
@@ -376,7 +385,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	/* Calling insert of WSSC */
 	bool wssc_insert_res = false;
 	if(wssc_map) 
-		wssc_insert_res = wssc_map->insert(region, temp, pht_table[setIndex][index].pattern, n);
+		wssc_insert_res = wssc_map->insert(region, temp, final_pattern, n);
 
 	/* Check UC/TC ratio. If it's
 	 * less than GOLDEN_THROSHOLD, don't prefetch
@@ -409,7 +418,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	int k = 0;
 	for(int i=0;i<MAX_OFFSET;++i)
 	{
-		if(pht_table[setIndex][index].pattern[i])
+		if(final_pattern[i])
 		{
 			prefList[k] = (region << REGION_SIZE_LOG) + (i << LINE_SIZE_LOG);
 			#ifdef DEBUG 
@@ -454,6 +463,35 @@ void SMSPrefetcher::incr_tc(unsigned long int pht_tag, unsigned int n)
 
 		if(pht_table[setIndex][wayIndex].tc > tc_max)
 			tc_max = pht_table[setIndex][wayIndex].tc;
+		#ifdef DEBUG
+			debug_pht_entry(setIndex, wayIndex);
+		#endif
+	}
+}
+void SMSPrefetcher::decr_tc(unsigned long int pht_tag, unsigned int n)
+{
+	unsigned int setIndex = pht_tag & (pht_table_sets - 1);
+	unsigned int tag = pht_tag >> pht_table_sets_log;
+	int wayIndex = -1;
+	#ifdef DEBUG
+		fprintf(stderr, "WSSC called incr_tc,PT:%lx,S:%d,T:%x\n", pht_tag, setIndex, tag);
+	#endif
+	for(int i=0;i<pht_table_assoc;++i)
+	{
+		if(pht_table[setIndex][i].valid && pht_table[setIndex][i].tag == tag)
+		{
+			wayIndex = i;
+			break;
+		}
+	}
+	if(wayIndex!=-1)
+	{
+		#ifdef DEBUG
+			fprintf(stderr, "Icrementing TC of [%d,%d]\n", setIndex, wayIndex);
+			debug_pht_entry(setIndex, wayIndex);
+		#endif
+		pht_table[setIndex][wayIndex].tc -= n;
+
 		#ifdef DEBUG
 			debug_pht_entry(setIndex, wayIndex);
 		#endif

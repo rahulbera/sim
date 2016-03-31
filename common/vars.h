@@ -9,7 +9,7 @@
 #define L1D_B 64*B
 #define L1D_C 32*KB
 
-#define L2_TYPE 2 //1=LRU;2=DRRIP
+#define L2_TYPE 1 //1=LRU;2=DRRIP
 #define L2_A 16
 #define L2_B 64*B
 #define L2_C 2*MB
@@ -26,8 +26,8 @@
 #define SMS_FIL 32
 #define SMS_PHT (16*1024)
 #define SMS_PHT_A 8
-#define THRESHOLD 0.25
-#define WSSC_HELP 0
+#define THRESHOLD 0.10
+#define WSSC_HELP 1
 
 #define WSSC_S (4*1024)
 #define WSSC_A 8

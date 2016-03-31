@@ -64,6 +64,7 @@ class SMSPrefetcher : public Prefetcher
 
 		void link_wssc(wssc*);
 		void incr_tc(unsigned long int, unsigned int);
+		void decr_tc(unsigned long int, unsigned int);
 		void incr_uc(unsigned long int);
 		void update_tc_uc();
 
