@@ -26,13 +26,13 @@
 #define SMS_FIL 32
 #define SMS_PHT (16*1024)
 #define SMS_PHT_A 8
-#define THRESHOLD 0.10
 #define WSSC_HELP 1
 
-#define WSSC_S (4*1024)
-#define WSSC_A 8
+#define PLT_S (2*1024)
+#define PLT_A 8
+#define SAT_A 16
 #define WSSC_I (4*1024*1024)
-//#define WSSC_I 1000000
+#define THRESHOLD 0.25
 
 
 #endif /* VARS_H */

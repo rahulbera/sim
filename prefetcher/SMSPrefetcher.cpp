@@ -13,6 +13,7 @@ unsigned int SMSPrefetcher::log2(unsigned int n)
 void SMSPrefetcher::link_wssc(wssc *w)
 {
 	wssc_map = w;
+	wssc_threshold = w->get_threshold();
 }
 
 void SMSPrefetcher::prefetcher_init(char *name, int n)
@@ -30,6 +31,7 @@ void SMSPrefetcher::prefetcher_init(char *s, unsigned int acc_size, unsigned int
 	pht_table_assoc = pht_assoc;
 	pht_table_sets = pht_size/pht_assoc;
 	pht_table_sets_log = log2(pht_table_sets);
+	wssc_threshold = 0;
 	
 	#ifdef DEBUG
 		fprintf(stderr, "S:%d A:%d S:%d SL:%d\n", pht_table_size, pht_table_assoc, pht_table_sets, pht_table_sets_log);
@@ -393,7 +395,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	if(WSSC_HELP && /*n<10 &&*/ pht_table[setIndex][index].tc!=0)
 	{
 		float ratio = (float)pht_table[setIndex][index].uc / pht_table[setIndex][index].tc;
-		if(ratio < THRESHOLD)
+		if(ratio < wssc_threshold)
 		{
 			stat_total_threshold_check_failure++;
 			#ifdef DEBUG
@@ -555,7 +557,6 @@ void SMSPrefetcher::prefetcher_final_stats()
 	fprintf(stdout, "FTSize = %d\n", filter_table_size);
 	fprintf(stdout, "PHTSize = %d\n", pht_table_size);
 	fprintf(stdout, "PHTAssoc = %d\n", pht_table_assoc);
-	fprintf(stdout, "Threshold = %f\n", THRESHOLD);
 	fprintf(stdout, "TotalPrefetch = %d\n", stat_total_prefetch);
 	fprintf(stdout, "TotalPHTHit = %d\n", stat_total_pht_hit);
 	fprintf(stdout, "ThresholdCheckFailed = %d\n", stat_total_threshold_check_failure);

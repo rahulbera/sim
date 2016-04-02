@@ -11,13 +11,19 @@
 typedef unsigned int uint;
 typedef unsigned long int ulong;
 
-typedef struct wssc_entry
+typedef struct plt
 {
 	uint tag;
-	ulong pht_tag;
-	bool *pattern;
 	bool valid;
-}wssc_t;
+}plt_t;
+
+typedef struct sat
+{
+	unsigned long int pht_tag;
+	bool *pattern;
+	int age;
+	bool valid;
+}sat_t;
 
 typedef struct counter
 {
@@ -31,29 +37,31 @@ class wssc
 {
 	private:
 		char name[100];
-		wssc_t **map;
-		uint size;
-		uint associativity;
-		uint sets;
-		uint setsInLog;
+		float threshold;
+		plt_t **plt;
+		sat_t **sat;
+		uint plt_size, plt_assoc, plt_sets, plt_sets_in_log;
+		uint sat_size, sat_assoc, sat_sets, sat_sets_in_log;
 		ulong interval;
 		SMSPrefetcher *prefetcher;
 
 		/* Stat variables */
 		uint total_invalidation;
-		uint total_wssc_access;
+		uint total_access;
 		uint total_insert;
 		uint replacementNeeded;
 		uint samePHTAccess;
+		uint diffPHTAccess;
 		std::unordered_map<uint, counter_t*>pc_prefetch_map;
 
 	public:
 		wssc();
 		~wssc();
-		void init(char*, uint, uint, ulong);
+		void init(char*, uint, uint, uint, ulong, float);
 		void link_prefetcher(SMSPrefetcher*);
 		ulong get_interval();
-		bool find(uint,uint*,uint*,uint*);
+		float get_threshold();
+		bool plt_find(uint,uint*,uint*,uint*);
 		bool insert(uint, ulong, bool*, uint);
 		void update(uint, uint);
 		void invalidate();
@@ -61,7 +69,7 @@ class wssc
 		void final_stats();
 
 		/* debug functions */
-		void debug_wssc_entry(uint, uint);
+		void debug_sat_entry(uint, uint);
 		void dump(uint);
 	
 	private:

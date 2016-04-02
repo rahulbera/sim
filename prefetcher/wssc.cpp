@@ -4,6 +4,12 @@
 #include "wssc.h"
 #include "../common/vars.h"
 
+uint wssc::log2(uint n)
+{
+	if(n==1) return 0;
+	else return (1+log2(n/2));
+}
+
 wssc::wssc()
 {
 
@@ -11,57 +17,74 @@ wssc::wssc()
 
 wssc::~wssc()
 {
-	for(int i=0;i<sets;++i)
-	{
-		for(uint j=0;j<associativity;++j)
-			free(map[i][j].pattern);
-	}
-	free(map);
+	free(plt);
+	free(sat);
 }
 
-void wssc::init(char *s, uint n, uint a, ulong i)
+void wssc::init(char *s, uint plt_s, uint plt_a, uint sat_a, ulong i, float t)
 {
 	strcpy(name,s);
-	size = n;
-	associativity = a;
-	sets = size/associativity;
-	setsInLog = log2(sets);
 	interval = i;
+	threshold = t;
 
-	map = (wssc_t**)malloc(sets * sizeof(wssc_t*));
-	ASSERT(map!=NULL, "WSSC Allocation1 failed!\n");
-	for(uint i=0;i<sets;++i)
+	plt_size = plt_s;
+	plt_assoc = plt_a;
+	plt_sets = plt_size/plt_assoc;
+	plt_sets_in_log = log2(plt_sets);
+	sat_size = plt_s * sat_a;
+	sat_assoc = sat_a;
+	sat_sets = plt_s;
+	sat_sets_in_log = log2(sat_sets);
+
+	plt = (plt_t**)malloc(plt_sets*sizeof(plt_t*));
+	ASSERT(plt!=NULL,"PLT malloc failed 1\n");
+	for(uint i=0;i<plt_sets;++i)
 	{
-		map[i] = (wssc_t*)malloc(associativity * sizeof(wssc_t));
-		ASSERT(map[i]!=NULL, "WSSC Allocation2 failed!\n");
+		plt[i] = (plt_t*)malloc(plt_assoc*sizeof(plt_t));
+		ASSERT(plt[i]!=NULL,"PLT malloc failed 2\n");
 	}
-	for(uint i=0;i<sets;++i)
+	for(uint i=0;i<plt_sets;++i)
 	{
-		for(uint j=0;j<associativity;++j)
+		for(uint j=0;j<plt_assoc;++j)
+			plt[i][j].valid = false;
+	}
+
+	sat = (sat_t**)malloc(sat_sets*sizeof(sat_t*));
+	ASSERT(sat!=NULL,"SAT malloc failed 1\n");
+	for(uint i=0;i<sat_sets;++i)
+	{
+		sat[i] = (sat_t*)malloc(sat_assoc*sizeof(sat_t));
+		ASSERT(sat[i]!=NULL, "SAT malloc falied 2\n");
+	}
+	for(uint i=0;i<sat_sets;++i)
+	{
+		for(uint j=0;j<sat_assoc;++j)
 		{
-			map[i][j].pattern = (bool*)malloc(MAX_OFFSET * sizeof(bool));
-			ASSERT(map[i][j].pattern!=NULL, "WSSC pattern allocation failed!\n");
-			for(uint k=0;k<MAX_OFFSET;++k) map[i][j].pattern[k] = false;
-			map[i][j].valid = false;
+			sat[i][j].pattern = (bool*)malloc(MAX_OFFSET*sizeof(bool));
+			ASSERT(sat[i][j].pattern!=NULL, "SAT pattern malloc failed!\n");
+			for(uint k=0;k<MAX_OFFSET;++k) sat[i][j].pattern[k] = false;
+			sat[i][j].age = 0;
+			sat[i][j].valid = false;
 		}
 	}
 
 	total_invalidation = 0;
-	total_wssc_access = 0;
+	total_access = 0;
 	total_insert = 0;
-	samePHTAccess = 0;
 	replacementNeeded = 0;
+	samePHTAccess = 0;
+	diffPHTAccess = 0;
 }
 
-uint wssc::log2(uint n)
-{
-	if(n==1) return 0;
-	else return (1+log2(n/2));
-}
 
 ulong wssc::get_interval()
 {
 	return interval;
+}
+
+float wssc::get_threshold()
+{
+	return threshold;
 }
 
 void wssc::link_prefetcher(SMSPrefetcher *pref)
@@ -69,15 +92,15 @@ void wssc::link_prefetcher(SMSPrefetcher *pref)
 	prefetcher = pref;
 }
 
-bool wssc::find(uint page, uint *s, uint *w, uint *t)
+bool wssc::plt_find(uint page, uint *s, uint *w, uint *t)
 {
-	uint setIndex = page & (sets-1);
-	uint tag = page >> setsInLog;
+	uint setIndex = page & (plt_sets-1);
+	uint tag = page >> plt_sets_in_log;
 	bool found = false;
 	uint wayIndex;
-	for(uint i=0;i<associativity;++i)
+	for(uint i=0;i<plt_assoc;++i)
 	{
-		if(map[setIndex][i].valid && map[setIndex][i].tag == tag)
+		if(plt[setIndex][i].valid && plt[setIndex][i].tag == tag)
 		{
 			found = true;
 			wayIndex = i;
@@ -98,13 +121,15 @@ void wssc::invalidate()
 	total_invalidation++;
 	//dump(total_invalidation);
 	//prefetcher->dump(total_invalidation);
-	for(uint i=0;i<sets;++i)
+	for(uint i=0;i<plt_sets;++i)
 	{
-		for(uint j=0;j<associativity;++j)
-		{
-			for(uint k=0;k<MAX_OFFSET;++k) map[i][j].pattern[k] = false;
-			map[i][j].valid = false;
-		}		
+		for(uint j=0;j<plt_assoc;++j)
+			plt[i][j].valid = false;
+	}
+	for(uint i=0;i<sat_sets;++i)
+	{
+		for(uint j=0;j<sat_assoc;++j)
+			sat[i][j].valid = false;
 	}
 	prefetcher->update_tc_uc();
 	#ifdef DEBUG
@@ -115,117 +140,138 @@ void wssc::invalidate()
 /* Prefetcher calls this function
  * during issuing a new prefetch vector
  * Returns true if it actually creates 
- * a new page tracker. False if WSSC is
- * already monitoring the page from past.
+ * a new tracker. False otherwise.
  */
 bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 {
-	total_wssc_access++;
+	total_access++;
 	uint setIndex, wayIndex, tag;
-	bool found = find(page, &setIndex, &wayIndex, &tag);
+	bool found = plt_find(page, &setIndex, &wayIndex, &tag);
 
 	#ifdef DEBUG
 		fprintf(stderr, "WSSC insert:P:%x,PHT_T:%lx,N:%d,F:%d,S:%d,W:%d,T:%x\n", 	page, pht_tag, n,
 																					found, setIndex, wayIndex, tag);
 	#endif
 
-	/* If the page is already being monitored by wssc */
+	/* If the page is found in PLT */
 	if(found)
 	{
-		total_insert++;
-		uint pc = (uint)(pht_tag >> 6);
-		std::unordered_map<uint,counter_t*>::iterator it = pc_prefetch_map.find(pc);
-		if(it != pc_prefetch_map.end())
-			it->second->counter1 += n;
-		else
-		{
-			counter_t *temp = (counter_t*)malloc(sizeof(counter_t));
-			temp->counter1 = n;
-			temp->counter2 = 0;
-			pc_prefetch_map.insert(std::pair<uint,counter_t*>(pc,temp));
-		}
 		#ifdef DEBUG
-			fprintf(stderr, "New page access: found in WSSC, S:%d W:%d\n", setIndex, wayIndex);
-			debug_wssc_entry(setIndex, wayIndex);
+			fprintf(stderr, "Page %x found in PLT [%d,%d]\n", page, setIndex, wayIndex);
 		#endif
 		ASSERT(setIndex>=0 && wayIndex>=0, "Invalid setIndex/wayIndex\n");
-		if(map[setIndex][wayIndex].pht_tag == pht_tag)
+		uint sat_set_index = (setIndex * plt_assoc) + wayIndex;
+		ASSERT((sat_set_index>=0 && sat_set_index<sat_sets), "Invalid SAT set index\n");
+
+		/* Find the PHT in SAT */
+		int sat_way_index = -1;
+		for(int i=0;i<sat_assoc;++i)
+		{
+			if(sat[sat_set_index][i].valid && sat[sat_set_index][i].pht_tag == pht_tag)
+			{
+				sat_way_index = i;
+				break;
+			}
+		}
+		/* If found in SAT */
+		if(sat_way_index != -1)
 		{
 			samePHTAccess++;
 			#ifdef DEBUG
-				fprintf(stderr, "Accessed by same pht_tag:%lx\n", pht_tag);
-				fprintf(stderr, "Incrementing TC of %lx by %d\n", pht_tag, n);
+				fprintf(stderr, "PHT tag %lx found\n", pht_tag);
+				debug_sat_entry(sat_set_index, sat_way_index);
 			#endif
 			uint m = 0;
-			for(uint i=0;i<MAX_OFFSET;++i) {if(map[setIndex][wayIndex].pattern[i] && pattern[i]) m++;}
 			for(uint i=0;i<MAX_OFFSET;++i)
-				map[setIndex][wayIndex].pattern[i] = (map[setIndex][wayIndex].pattern[i] | pattern[i]);
-			prefetcher->incr_tc(pht_tag, (n-m));
+			{ 
+				if(sat[sat_set_index][sat_way_index].pattern[i] && pattern[i]) m++;
+				sat[sat_set_index][sat_way_index].pattern[i] = sat[sat_set_index][sat_way_index].pattern[i] | pattern[i];
+			}
+			for(uint i=0;i<sat_assoc;++i) sat[sat_set_index][i].age++;
+			sat[sat_set_index][sat_way_index].age = 0;
+			prefetcher->incr_tc(pht_tag, n-m);
+			#ifdef DEBUG
+				debug_sat_entry(sat_set_index,sat_way_index);
+			#endif
+			return false;
 		}
+		/* If it's not in SAT */ 
 		else
 		{
+			diffPHTAccess++;
 			#ifdef DEBUG
-				fprintf(stderr, "Different pht_tag accessing same page %lx and %lx\n", map[setIndex][wayIndex].pht_tag, pht_tag);
-				fprintf(stderr, "PHT of PC:%x access collision to same page %x by PC:%x", (uint)(map[setIndex][wayIndex].pht_tag>>6), page, (uint)(pht_tag>>6));
+				fprintf(stderr, "PHT tag %lx not found\n", pht_tag);
 			#endif
-			map[setIndex][wayIndex].pht_tag = pht_tag;
-			for(uint i=0;i<MAX_OFFSET;++i)
-				map[setIndex][wayIndex].pattern[i] = pattern[i];
+			int repIndex = -1;
+			int maxAge = -1;
+			for(int i=0;i<sat_assoc;++i)
+			{
+				if(!sat[sat_set_index][i].valid)
+				{
+					repIndex = i;
+					break;
+				}
+				else if(sat[sat_set_index][i].age > maxAge)
+				{
+					repIndex = i;
+					maxAge = sat[sat_set_index][i].age;
+				}
+			}
+			ASSERT(repIndex!=-1, "Invalid SAT replacement index\n");
+			#ifdef DEBUG
+				fprintf(stderr, "SAT replacement index [%d,%d]\n", sat_set_index, repIndex);
+				debug_sat_entry(sat_set_index, repIndex);
+			#endif
+			sat[sat_set_index][repIndex].pht_tag = pht_tag;
+			for(uint i=0;i<MAX_OFFSET;++i) sat[sat_set_index][repIndex].pattern[i] = pattern[i];
+			sat[sat_set_index][repIndex].valid = true;
+			for(uint i=0;i<sat_assoc;++i) sat[sat_set_index][i].age++;
+			sat[sat_set_index][repIndex].age = 0;
 			prefetcher->incr_tc(pht_tag, n);
+			#ifdef DEBUG
+				debug_sat_entry(sat_set_index, repIndex);
+			#endif
+			return true;
 		}
-		#ifdef DEBUG
-			debug_wssc_entry(setIndex,wayIndex);
-		#endif
-		return false;
 	}
-
-	/* If the page is not found inside wssc */
+	/* if the page is not at all tracked by PLT */
 	else
 	{
 		#ifdef DEBUG
-			fprintf(stderr, "Page not found in WSSC\n");
+			fprintf(stderr, "Page %x not found in PLT\n", page);
 		#endif
 		int repIndex = -1;
-		for(uint i=0;i<associativity;++i)
+		for(int i=0;i<plt_assoc;++i)
 		{
-			if(!map[setIndex][i].valid)
+			if(!plt[setIndex][i].valid)
 			{
 				repIndex = i;
 				break;
 			}
 		}
-		if(repIndex != -1)
+		if(repIndex == -1)
 		{
-			total_insert++;
-			uint pc = (uint)(pht_tag >> 6);
-			std::unordered_map<uint,counter_t*>::iterator it = pc_prefetch_map.find(pc);
-			if(it != pc_prefetch_map.end())
-				it->second->counter1 += n;
-			else
-			{
-				counter_t *temp = (counter_t*)malloc(sizeof(counter_t));
-				temp->counter1 = n;
-				temp->counter2 = 0;
-				pc_prefetch_map.insert(std::pair<uint,counter_t*>(pc,temp));
-			}
+			replacementNeeded++;
 			#ifdef DEBUG
-				fprintf(stderr, "Rep candidate found:[%*d,%d]\n", 3, setIndex, repIndex);
-				debug_wssc_entry(setIndex,repIndex);
+				fprintf(stderr, "No replacement candidate found!\n");
 			#endif
-			prefetcher->incr_tc(pht_tag, n);
-			map[setIndex][repIndex].tag = tag;
-			map[setIndex][repIndex].pht_tag = pht_tag;
-			for(uint i=0;i<64;++i) map[setIndex][repIndex].pattern[i] = pattern[i];
-			map[setIndex][repIndex].valid = true;
-			#ifdef DEBUG
-				debug_wssc_entry(setIndex, repIndex);
-			#endif
-			return true;
+			return false;
 		}
 		else
 		{
-			replacementNeeded++;
-			return false;
+			total_insert++;
+			#ifdef DEBUG
+				fprintf(stderr, "Rep candidate found:[%*d,%*d]\n", 3, setIndex, 2, repIndex);
+			#endif
+			plt[setIndex][repIndex].tag = tag;
+			plt[setIndex][repIndex].valid = true;
+			uint sat_set_index = (setIndex * plt_assoc) + repIndex;
+			ASSERT(sat[sat_set_index][0].valid==false, "Invalid SAT insertion for first time\n");
+			sat[sat_set_index][0].pht_tag = pht_tag;
+			for(uint i=0;i<MAX_OFFSET;++i) sat[sat_set_index][0].pattern[i] = pattern[i];
+			sat[sat_set_index][0].age = 0;
+			sat[sat_set_index][0].valid = true;
+			prefetcher->incr_tc(pht_tag, n);
 		}
 	}
 }
@@ -237,36 +283,30 @@ bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 void wssc::update(uint page, uint offset)
 {
 	uint setIndex, wayIndex, tag;
-	bool found = find(page, &setIndex, &wayIndex, &tag);
+	bool found = plt_find(page, &setIndex, &wayIndex, &tag);
 
 	if(found)
 	{
 		#ifdef DEBUG
 			fprintf(stderr, "Demand access to page:%x offset:%d found in WSSC\n", page, offset);
-			debug_wssc_entry(setIndex,wayIndex);
 		#endif
 		ASSERT(setIndex>=0 && wayIndex>=0, "Invalid setIndex/wayIndex\n");
-		if(map[setIndex][wayIndex].pattern[offset])
+		uint sat_set_index = (setIndex * plt_assoc) + wayIndex;
+		ASSERT((sat_set_index>=0 && sat_set_index<sat_sets), "Invalid SAT set index\n");
+		for(uint i=0;i<sat_assoc;++i)
 		{
-			#ifdef DEBUG
-				fprintf(stderr, "WSSC hit at offset %d\n", offset);
-			#endif
-			prefetcher->incr_uc(map[setIndex][wayIndex].pht_tag);
-			map[setIndex][wayIndex].pattern[offset] = false;
-			#ifdef DEBUG
-				debug_wssc_entry(setIndex,wayIndex);
-			#endif
-			uint pc = (uint)(map[setIndex][wayIndex].pht_tag >> 6);
-			std::unordered_map<uint,counter_t*>::iterator it = pc_prefetch_map.find(pc);
-			if(it != pc_prefetch_map.end())
-				it->second->counter2++;
+			if(sat[sat_set_index][i].valid && sat[sat_set_index][i].pattern[offset])
+			{
+				sat[sat_set_index][i].pattern[offset] = false;
+				prefetcher->incr_uc(sat[sat_set_index][i].pht_tag);
+			}
 		}
 	}
 }
 
 void wssc::dump(uint n)
 {
-	char filename[20];
+	/*char filename[20];
 	sprintf(filename, "debug/WSSC.%d",n);
 	FILE *fp = fopen(filename,"w");
 	ASSERT(fp!=NULL, "WSSC dump file creation failed!\n");
@@ -283,7 +323,7 @@ void wssc::dump(uint n)
 		}
 	}
 	fflush(fp);
-	fclose(fp);
+	fclose(fp);*/
 }
 
 void wssc::heart_beat_stats()
@@ -293,24 +333,25 @@ void wssc::heart_beat_stats()
 
 void wssc::final_stats()
 {
+	uint size = (plt_size*(20-plt_sets_in_log+1)+sat_size*(38+64+1))/(8*1024);
 	fprintf(stdout, "[ WSSC.%s ]\n", name);
-	fprintf(stdout, "Size = %d\n", size);
-	fprintf(stdout, "Associativity = %d\n", associativity);
-	fprintf(stdout, "Interval = %lu\n", interval);
-	fprintf(stdout, "Invalidation = %d\n", total_invalidation);
-	fprintf(stdout, "TotalAccess = %d\n", total_wssc_access);
-	fprintf(stdout, "TotalInsertion = %d\n", total_insert);
+	fprintf(stdout, "PLTSize = %d\n", plt_size);
+	fprintf(stdout, "PLTAssoc = %d\n", plt_assoc);
+	fprintf(stdout, "SATAssoc = %d\n", sat_assoc);
+	fprintf(stdout, "Threshold = %0.3f\n", threshold);
+	fprintf(stdout, "Interval = %ld\n", interval);
+	fprintf(stdout, "Invalidaion = %d\n", total_invalidation);
+	fprintf(stdout, "Size = %dKB\n", size);
+	fprintf(stdout, "TotalAccess = %d\n", total_access);
 	fprintf(stdout, "ReplcementNeeded = %d\n", replacementNeeded);
+	fprintf(stdout, "ReplcementFound = %d\n", total_insert);
 	fprintf(stdout, "SamePHTAccess = %d\n", samePHTAccess);
-	fprintf(stdout, "WSSC.PC_PREFECTH_MAP\n");
-	std::unordered_map<uint,counter_t*>::iterator it;
-	for(it=pc_prefetch_map.begin();it!=pc_prefetch_map.end();++it)
-		fprintf(stdout, "%*x %*d %*d\n", 8, it->first, 8, it->second->counter1, 8, it->second->counter2);
+	fprintf(stdout, "DiffPHTAccess = %d\n", diffPHTAccess);
 }
 
-void wssc::debug_wssc_entry(uint setIndex, uint wayIndex)
+void wssc::debug_sat_entry(uint setIndex, uint wayIndex)
 {
-	fprintf(stderr, "WSSC:<%*x|%*lx|", 6, map[setIndex][wayIndex].tag, 10, map[setIndex][wayIndex].pht_tag);
-	for(int i=0;i<MAX_OFFSET;++i) fprintf(stderr, "%d", map[setIndex][wayIndex].pattern[i]);
-	fprintf(stderr, "|%d>\n", map[setIndex][wayIndex].valid);
+	fprintf(stderr, "SAT:<%lx|", sat[setIndex][wayIndex].pht_tag);
+	for(uint i=0;i<MAX_OFFSET;++i) fprintf(stderr, "%d", sat[setIndex][wayIndex].pattern[i]);
+	fprintf(stderr, "|%d|%d>\n", sat[setIndex][wayIndex].age, sat[setIndex][wayIndex].valid);
 }

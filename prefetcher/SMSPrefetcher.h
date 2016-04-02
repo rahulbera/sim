@@ -41,6 +41,7 @@ class SMSPrefetcher : public Prefetcher
 		unsigned int pht_table_sets;
 		unsigned int pht_table_sets_log;
 		unsigned int pht_table_assoc;
+		float wssc_threshold;
 
 		/* Stats*/
 		unsigned int stat_total_prefetch;

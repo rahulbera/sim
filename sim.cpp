@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
 		l2.init("L2", "DRRIP", L2_A, L2_B, L2_C, RRPV_SIZE, THROTTLE, PSEL_SIZE, cache_lite);
 	#endif
 	smsp.prefetcher_init("SMS", SMS_ACC, SMS_FIL, SMS_PHT, SMS_PHT_A);
-	wssc_map.init("SMS", WSSC_S, WSSC_A, WSSC_I);
+	wssc_map.init("SMS", PLT_S, PLT_A, SAT_A, WSSC_I, THRESHOLD);
 	wssc_map.link_prefetcher(&smsp);
 	l2.link_wssc(&wssc_map);
 	smsp.link_wssc(&wssc_map);

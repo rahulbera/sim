@@ -1,3 +1,9 @@
+v0.8
+=====================================================
+Major change in WSSC implementation, decoupled to
+Page Lookup Table and SAmpler Table. More generic than
+previous implementation.
+
 v0.7
 ======================================================
 Major update: added support for DRRIP scheme. All tunig variables
