@@ -26,7 +26,6 @@
 #define SMS_FIL 32
 #define SMS_PHT (16*1024)
 #define SMS_PHT_A 8
-#define WSSC_HELP 1
 
 #define PLT_S (2*1024)
 #define PLT_A 8

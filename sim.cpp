@@ -21,6 +21,7 @@ static bool hasBegin;
 static bool hasEnd;
 static bool prefetcher_on;
 static bool cache_on;
+static bool wssc_on;
 static int  l1_verbose;
 static int  l2_verbose;
 static bool cache_lite;
@@ -55,6 +56,8 @@ static char help[1000] =
 				"	Disables prefetcher.\n"
 				"--no-cache\n"
 				"	Disables cache hierarchy.\n"
+				"--no-wssc\n"
+				"	Disables WSSC.\n"
 				;
 
 static LRUCache l1;
@@ -171,6 +174,11 @@ void sim_parse_command_line(int argc, char *argv[])
 			cache_on = false;
 			continue;
 		}
+		if(!strcmp(argv[i], "--no-wssc"))
+		{
+			wssc_on = false;
+			continue;
+		}
 		
 		fprintf(stderr, "Invalid knob %s\n", argv[i]);
 		fprintf(stderr, "%s\n", help);
@@ -189,6 +197,7 @@ void sim_init()
 	hasEnd = false;
 	prefetcher_on = true;
 	cache_on = true;
+	wssc_on = true;
 	l1_verbose = 0;
 	l2_verbose = 0;
 	cache_lite = true;
@@ -244,8 +253,8 @@ int main(int argc, char *argv[])
 	smsp.prefetcher_init("SMS", SMS_ACC, SMS_FIL, SMS_PHT, SMS_PHT_A);
 	wssc_map.init("SMS", PLT_S, PLT_A, SAT_A, WSSC_I, THRESHOLD);
 	wssc_map.link_prefetcher(&smsp);
-	l2.link_wssc(&wssc_map);
-	smsp.link_wssc(&wssc_map);
+	l2.link_wssc(&wssc_map, wssc_on);
+	smsp.link_wssc(&wssc_map, wssc_on);
 
 	/* SYSTEM DECALARATION END */
 

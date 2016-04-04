@@ -140,7 +140,7 @@ int LRUCache::update(unsigned int pc, unsigned int addr, bool isPrefetched)
     {
         totalAccess++;
         stat_heart_beat_total_access++;
-        if(wssc_map && (totalAccess % wssc_interval) == 0)
+        if(wssc_map && wssc_on && (totalAccess % wssc_interval) == 0)
             wssc_map->invalidate();
     }
     int wayIndex = find(setIndex,tag);
@@ -172,9 +172,10 @@ int LRUCache::update(unsigned int pc, unsigned int addr, bool isPrefetched)
 
 
 
-void LRUCache::link_wssc(wssc *w)
+void LRUCache::link_wssc(wssc *w, bool w_on)
 {
     wssc_map = w;
+    wssc_on = w_on;
     wssc_interval = w->get_interval();
 }
 

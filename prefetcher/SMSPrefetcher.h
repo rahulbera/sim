@@ -31,6 +31,7 @@ class SMSPrefetcher : public Prefetcher
 	private:
 		char name[100];
 		wssc *wssc_map;
+		bool wssc_on;
 
 		entry_t *acc_table;
 		entry_t *filter_table;
@@ -63,7 +64,7 @@ class SMSPrefetcher : public Prefetcher
 		void prefetcher_final_stats();
 		void prefetcher_destroy();
 
-		void link_wssc(wssc*);
+		void link_wssc(wssc*, bool);
 		void incr_tc(unsigned long int, unsigned int);
 		void decr_tc(unsigned long int, unsigned int);
 		void incr_uc(unsigned long int);

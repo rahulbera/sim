@@ -10,9 +10,10 @@ unsigned int SMSPrefetcher::log2(unsigned int n)
     else return (1+log2(n/2));
 }
 
-void SMSPrefetcher::link_wssc(wssc *w)
+void SMSPrefetcher::link_wssc(wssc *w, bool w_on)
 {
 	wssc_map = w;
+	wssc_on = w_on;
 	wssc_threshold = w->get_threshold();
 }
 
@@ -104,7 +105,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	#endif
 
 	/* First check wssc for this demand access */
-	if(wssc_map) wssc_map->update(region, offset);
+	if(wssc_map && wssc_on) wssc_map->update(region, offset);
 
 	/* Search for the entry in accumulation table */
 	index = -1;
@@ -386,13 +387,13 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 
 	/* Calling insert of WSSC */
 	bool wssc_insert_res = false;
-	if(wssc_map) 
+	if(wssc_map && wssc_on) 
 		wssc_insert_res = wssc_map->insert(region, temp, final_pattern, n);
 
 	/* Check UC/TC ratio. If it's
 	 * less than GOLDEN_THROSHOLD, don't prefetch
 	 */
-	if(WSSC_HELP && /*n<10 &&*/ pht_table[setIndex][index].tc!=0)
+	if(pht_table[setIndex][index].tc!=0 /*&& n<10*/)
 	{
 		float ratio = (float)pht_table[setIndex][index].uc / pht_table[setIndex][index].tc;
 		if(ratio < wssc_threshold)

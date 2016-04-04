@@ -24,6 +24,7 @@ class LRUCache : public BaseCache
     public:
         bool lite;
         wssc* wssc_map;
+        bool wssc_on;
         unsigned long int wssc_interval;
         /* Stores prefetch lines which are evicted from cache 
          * without getting demand access in <LINE,ep_t> format
@@ -62,7 +63,7 @@ class LRUCache : public BaseCache
         void final_stats(int);
 
         /* Own functions */
-        void link_wssc(wssc*);
+        void link_wssc(wssc*, bool);
         void insert_early_prefetch_map(unsigned int, unsigned int);
         void update_early_prefetch_map(unsigned int, unsigned int);
         void insert_pc_prefetch_map(unsigned int);
