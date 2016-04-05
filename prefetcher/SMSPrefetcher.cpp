@@ -328,7 +328,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	filter_table[repIndex].pc = pc;
 	filter_table[repIndex].offset = offset;
 	for(int i=0;i<MAX_OFFSET;++i) filter_table[repIndex].pattern[i] = false;
-	filter_table[repIndex].pattern[offset] = true;
+	//filter_table[repIndex].pattern[offset] = true;
 	filter_table[repIndex].valid = true;
 	for(int i=0;i<filter_table_size;++i) filter_table[i].age++;
 	filter_table[repIndex].age = 0;
@@ -372,14 +372,9 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	/* Created this aux array to mask prefetch of 
 	 * cacheline which generated the prefetch itself.
 	 */
-	bool *final_pattern = (bool*)malloc(MAX_OFFSET*sizeof(bool));
-	ASSERT(final_pattern!=NULL, "Final pattern malloc failed!\n");
-	for(int i=0;i<MAX_OFFSET;++i)
-		final_pattern[i] = pht_table[setIndex][index].pattern[i];
-	final_pattern[offset] = false;
 
 	int n = 0;
-	for(int i=0;i<MAX_OFFSET;++i) {if(final_pattern[i]) n++;}
+	for(int i=0;i<MAX_OFFSET;++i) {if(pht_table[setIndex][index].pattern[i]) n++;}
 
 	#ifdef DEBUG
 		fprintf(stderr, "Sending info to WSSC\n");
@@ -388,7 +383,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	/* Calling insert of WSSC */
 	bool wssc_insert_res = false;
 	if(wssc_map && wssc_on) 
-		wssc_insert_res = wssc_map->insert(region, temp, final_pattern, n);
+		wssc_insert_res = wssc_map->insert(region, temp, pht_table[setIndex][index].pattern, n);
 
 	/* Check UC/TC ratio. If it's
 	 * less than GOLDEN_THROSHOLD, don't prefetch
@@ -421,7 +416,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 	int k = 0;
 	for(int i=0;i<MAX_OFFSET;++i)
 	{
-		if(final_pattern[i])
+		if(pht_table[setIndex][index].pattern[i])
 		{
 			prefList[k] = (region << REGION_SIZE_LOG) + (i << LINE_SIZE_LOG);
 			#ifdef DEBUG 

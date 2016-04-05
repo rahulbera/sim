@@ -67,6 +67,7 @@ class wssc
 		void invalidate();
 		void heart_beat_stats();
 		void final_stats();
+		void update_pc_prefetch_map(ulong, uint);
 
 		/* debug functions */
 		void debug_sat_entry(uint, uint);

@@ -193,6 +193,7 @@ bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 			#ifdef DEBUG
 				debug_sat_entry(sat_set_index,sat_way_index);
 			#endif
+			update_pc_prefetch_map(pht_tag, n-m);
 			return false;
 		}
 		/* If it's not in SAT */ 
@@ -231,6 +232,7 @@ bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 			#ifdef DEBUG
 				debug_sat_entry(sat_set_index, repIndex);
 			#endif
+			//update_pc_prefetch_map(pht_tag, n);
 			return true;
 		}
 	}
@@ -272,6 +274,7 @@ bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 			sat[sat_set_index][0].age = 0;
 			sat[sat_set_index][0].valid = true;
 			prefetcher->incr_tc(pht_tag, n);
+			//update_pc_prefetch_map(pht_tag, n);
 		}
 	}
 }
@@ -299,6 +302,10 @@ void wssc::update(uint page, uint offset)
 			{
 				sat[sat_set_index][i].pattern[offset] = false;
 				prefetcher->incr_uc(sat[sat_set_index][i].pht_tag);
+				/*uint pc = sat[sat_set_index][i].pht_tag >> 6;
+				std::unordered_map<uint, counter_t*>::iterator it = pc_prefetch_map.find(pc);
+				if(it != pc_prefetch_map.end())
+					it->second->counter2++;*/
 			}
 		}
 	}
@@ -326,6 +333,21 @@ void wssc::dump(uint n)
 	fclose(fp);*/
 }
 
+void wssc::update_pc_prefetch_map(ulong pht_tag, uint n)
+{
+	uint pc = (uint)(pht_tag >> 6);
+	std::unordered_map<uint,counter_t*>::iterator it = pc_prefetch_map.find(pc);
+	if(it != pc_prefetch_map.end())
+		it->second->counter1 += n;
+	else
+	{
+		counter_t *temp = (counter_t*)malloc(sizeof(counter_t));
+		temp->counter1 = n;
+		temp->counter2 = 0;
+		pc_prefetch_map.insert(std::pair<uint,counter_t*>(pc,temp));
+	}
+}
+
 void wssc::heart_beat_stats()
 {
 
@@ -347,6 +369,10 @@ void wssc::final_stats()
 	fprintf(stdout, "ReplcementFound = %d\n", total_insert);
 	fprintf(stdout, "SamePHTAccess = %d\n", samePHTAccess);
 	fprintf(stdout, "DiffPHTAccess = %d\n", diffPHTAccess);
+	/*fprintf(stdout, "[WSSC.PC_PREFECTH_MAP]\n");
+	std::unordered_map<uint,counter_t*>::iterator it;
+	for(it=pc_prefetch_map.begin();it!=pc_prefetch_map.end();++it)
+		fprintf(stdout, "%*x %*d %*d\n", 8, it->first, 8, it->second->counter1, 8, it->second->counter2);*/
 }
 
 void wssc::debug_sat_entry(uint setIndex, uint wayIndex)

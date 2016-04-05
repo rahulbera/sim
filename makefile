@@ -3,7 +3,7 @@ MAIN = sim.cpp
 PREFETCHER = prefetcher
 CACHE = cache
 COMMON = common
-CXXFLAGS = -std=c++11 -o2 -Wall
+CXXFLAGS = -std=c++11 -o2 -Wno-write-strings
 DEPS = $(COMMON)/util.o $(PREFETCHER)/wssc.o $(PREFETCHER)/SMSPrefetcher.o $(CACHE)/BaseCache.o $(CACHE)/LRUCache.o $(CACHE)/DRRIPCache.o
 
 all: release debug
