@@ -235,6 +235,7 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 				debug_pht_entry(setIndex,repIndex2);
 			#endif
 			for(int i=0;i<MAX_OFFSET;++i) pht_table[setIndex][repIndex2].pattern[i] = acc_table[repIndex].pattern[i];
+			//pht_table[setIndex][repIndex2].tc = pht_table[setIndex][repIndex2].uc = 0;
 			for(int i=0;i<pht_table_assoc;++i) pht_table[setIndex][i].age++;
 			pht_table[setIndex][repIndex2].age = 0;
 			acc_table[repIndex].valid = false;
@@ -380,17 +381,22 @@ int SMSPrefetcher::prefetcher_operate(unsigned int pc, unsigned int addr, unsign
 		fprintf(stderr, "Sending info to WSSC\n");
 	#endif
 
+	/* Check UC/TC ratio. If it's
+	 * less than GOLDEN_THROSHOLD, don't prefetch
+	 */
+	float ratio;
+	if(pht_table[setIndex][index].tc == 0)
+		ratio = -1;
+	else
+		ratio = (float)pht_table[setIndex][index].uc / pht_table[setIndex][index].tc;
+	
 	/* Calling insert of WSSC */
 	bool wssc_insert_res = false;
 	if(wssc_map && wssc_on) 
 		wssc_insert_res = wssc_map->insert(region, temp, pht_table[setIndex][index].pattern, n);
-
-	/* Check UC/TC ratio. If it's
-	 * less than GOLDEN_THROSHOLD, don't prefetch
-	 */
-	if(pht_table[setIndex][index].tc!=0 /*&& n<10*/)
+	
+	if(ratio != -1)
 	{
-		float ratio = (float)pht_table[setIndex][index].uc / pht_table[setIndex][index].tc;
 		if(ratio < wssc_threshold)
 		{
 			stat_total_threshold_check_failure++;
@@ -563,11 +569,24 @@ void SMSPrefetcher::prefetcher_final_stats()
 	fprintf(stdout, "UCMax = %d\n", uc_max);
 }
 
-void SMSPrefetcher::prefetcher_destroy()
+void SMSPrefetcher::prefetcher_release()
 {
 	#ifdef DEBUG 
 		fprintf(stderr, "Deallocating prefetcher.%s\n", name);
 	#endif
+	for(uint i=0;i<filter_table_size;++i)
+		free(filter_table[i].pattern);
+	free(filter_table);
+	for(uint i=0;i<acc_table_size;++i)
+		free(acc_table[i].pattern);
+	free(acc_table);
+	for(uint i=0;i<pht_table_sets;++i)
+	{
+		for(uint j=0;j<pht_table_assoc;++j)
+			free(pht_table[i][j].pattern);
+		free(pht_table[i]);
+	}
+	free(pht_table);
 }
 
 void SMSPrefetcher::debug_acc_entry(int index)

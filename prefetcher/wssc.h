@@ -64,10 +64,12 @@ class wssc
 		bool plt_find(uint,uint*,uint*,uint*);
 		bool insert(uint, ulong, bool*, uint);
 		void update(uint, uint);
+		void update_pc_prefetch_map(ulong, uint);
 		void invalidate();
 		void heart_beat_stats();
 		void final_stats();
-		void update_pc_prefetch_map(ulong, uint);
+		void release();
+		
 
 		/* debug functions */
 		void debug_sat_entry(uint, uint);

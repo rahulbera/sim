@@ -62,7 +62,7 @@ class SMSPrefetcher : public Prefetcher
 		int  prefetcher_operate(unsigned int ip, unsigned int addr, unsigned int **prefAddr, int *size);
 		void prefetcher_heartbeat_stats();
 		void prefetcher_final_stats();
-		void prefetcher_destroy();
+		void prefetcher_release();
 
 		void link_wssc(wssc*, bool);
 		void incr_tc(unsigned long int, unsigned int);

@@ -20,6 +20,13 @@ BaseCache::BaseCache()
 
 BaseCache::~BaseCache()
 {
+
+}
+
+void BaseCache::release()
+{
+    for(uint i=0;i<noOfSets;++i)
+        free(cache[i]);
     free(cache);
 }
 

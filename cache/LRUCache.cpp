@@ -11,6 +11,11 @@ LRUCache::~LRUCache()
 
 }
 
+void LRUCache::release()
+{
+    BaseCache::release();
+}
+
 void LRUCache::init(char *s, char *t, unsigned int a, unsigned int b, unsigned int c, bool isLite)
 {
     BaseCache::init(s,t,a,b,c);

@@ -44,6 +44,7 @@ class DRRIPCache : public BaseCache
         int update(uint,uint,bool);
         void heart_beat_stats(int);
         void final_stats(int);
+		void release();
 
         /* Own fucntions */
         void link_wssc(wssc*);

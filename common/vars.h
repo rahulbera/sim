@@ -29,9 +29,9 @@
 
 #define PLT_S (2*1024)
 #define PLT_A 8
-#define SAT_A 16
+#define SAT_A 4
 #define WSSC_I (4*1024*1024)
-#define THRESHOLD 0.3
+#define THRESHOLD 0.25
 
 
 #endif /* VARS_H */

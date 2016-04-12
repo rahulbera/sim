@@ -2,7 +2,11 @@ CXX = g++
 CORE = wssc.o SMSPrefetcher.o
 CXXFLAGS = -o2 --std=c++11
 
-all: release debug
+all: release debug gdb
+
+.PHONY: gdb
+gdb: CXXFLAGS += -g
+gdb: $(CORE)
 
 .PHONY: debug
 debug: CXXFLAGS += -g -DDEBUG

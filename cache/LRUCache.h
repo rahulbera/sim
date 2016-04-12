@@ -61,6 +61,7 @@ class LRUCache : public BaseCache
         int update(unsigned int, unsigned int, bool);
         void heart_beat_stats(int);
         void final_stats(int);
+		void release();
 
         /* Own functions */
         void link_wssc(wssc*, bool);

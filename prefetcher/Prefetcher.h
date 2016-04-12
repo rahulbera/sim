@@ -20,7 +20,7 @@ class Prefetcher
 		virtual void prefetcher_final_stats()=0;
 
 		//deallocates everything
-		virtual void prefetcher_destroy()=0;
+		virtual void prefetcher_release()=0;
 };
 
 #endif

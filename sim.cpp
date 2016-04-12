@@ -219,8 +219,15 @@ void sim_fini(int signum)
 
 	wssc_map.final_stats();
 
+	if(cache_on)
+	{
+		l1.release();
+		l2.release();
+	}
 	if(prefetcher_on)
-		smsp.prefetcher_destroy();
+		smsp.prefetcher_release();
+
+	wssc_map.release();
 
 	gzclose(gfp);
 
@@ -306,6 +313,7 @@ int main(int argc, char *argv[])
 			{
 				for(int i=0;i<size;++i)
 					l2.update(pc, prefList[i], true);
+				free(prefList);
 			}
 		}
 		

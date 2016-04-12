@@ -17,7 +17,20 @@ wssc::wssc()
 
 wssc::~wssc()
 {
+	
+}
+
+void wssc::release()
+{
+	for(uint i=0;i<plt_sets;++i)
+		free(plt[i]);
 	free(plt);
+	for(uint i=0;i<sat_sets;++i)
+	{
+		for(uint j=0;j<sat_assoc;++j)
+			free(sat[i][j].pattern);
+		free(sat[i]);
+	}
 	free(sat);
 }
 
@@ -193,7 +206,7 @@ bool wssc::insert(uint page, ulong pht_tag, bool *pattern, uint n)
 			#ifdef DEBUG
 				debug_sat_entry(sat_set_index,sat_way_index);
 			#endif
-			update_pc_prefetch_map(pht_tag, n-m);
+			//update_pc_prefetch_map(pht_tag, n-m);
 			return false;
 		}
 		/* If it's not in SAT */ 

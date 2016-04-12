@@ -53,6 +53,7 @@ class BaseCache
         virtual void eviction(unsigned int,unsigned int)=0;
         virtual void insertion(unsigned int,unsigned int,unsigned int,unsigned int, bool)=0;
         virtual int update(unsigned int, unsigned int, bool)=0;
+		virtual void release();
         
         virtual void heart_beat_stats(int);
         virtual void final_stats(int);

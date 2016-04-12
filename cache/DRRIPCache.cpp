@@ -9,6 +9,14 @@ DRRIPCache::DRRIPCache()
 
 DRRIPCache::~DRRIPCache()
 {
+    
+}
+
+void DRRIPCache::release()
+{
+    BaseCache::release();
+    for(uint i=0;i<noOfSets;++i)
+        free(rrpv[i]);
     free(rrpv);
 }
 
